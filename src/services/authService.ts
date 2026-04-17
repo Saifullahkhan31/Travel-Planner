@@ -1,88 +1,132 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User } from '../types';
-import { MOCK_USER } from './mockData';
+import { supabase } from '../lib/supabase';
+import { User, GenderPreference, SeatPosition, BusType, OccupationType, UserRole } from '../types';
 
-const USER_KEY    = 'mock_user';
-const SESSION_KEY = 'mock_session';
-
-// Mock registered users store
-const REGISTERED_USERS: Record<string, { password: string; user: User }> = {
-  'saifullah@iobm.edu.pk': { password: 'Password1', user: MOCK_USER },
-  'demo@iobm.edu.pk'     : { password: 'Password1', user: { ...MOCK_USER, id: 'u2', name: 'Demo User', email: 'demo@iobm.edu.pk' } },
-};
+// Map Supabase Profile to App User Type
+function mapProfileToUser(authUser: any, profileMap: any): User {
+  return {
+    id: authUser.id,
+    email: authUser.email || '',
+    name: profileMap?.full_name || '',
+    avatarUrl: profileMap?.avatar_url || '',
+    phone: profileMap?.phone || '',
+    gender: profileMap?.gender || '',
+    genderPreference: (profileMap?.gender_preference || 'no_preference') as GenderPreference,
+    seatPreference: (profileMap?.seat_preference || 'window') as SeatPosition,
+    busTypePreference: (profileMap?.bus_type_preference || 'AC') as BusType,
+    frequentRoutes: profileMap?.frequent_routes || [],
+    area: profileMap?.area || '',
+    occupation: (profileMap?.occupation || 'student') as OccupationType,
+    role: (profileMap?.role || 'commuter') as UserRole,
+    notifTrips: profileMap?.notif_trips ?? true,
+    notifCrowd: profileMap?.notif_crowd ?? true,
+    notifBookings: profileMap?.notif_bookings ?? true,
+    createdAt: authUser.created_at,
+  };
+}
 
 export const authService = {
   async signUp(email: string, password: string, userData: Partial<User>): Promise<{ user: User | null; error: string | null }> {
-    await new Promise(r => setTimeout(r, 1000));
-    if (REGISTERED_USERS[email]) {
-      return { user: null, error: 'An account with this email already exists.' };
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+      if (!data.user) throw new Error('Signup failed.');
+
+      // Insert profile details
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: data.user.id,
+        full_name: userData.name,
+        phone: userData.phone,
+        gender: userData.gender,
+        gender_preference: userData.genderPreference,
+        occupation: userData.occupation || 'student',
+      });
+
+      if (profileError) console.error('Profile insertion error:', profileError);
+
+      const profileRes = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+      return { user: mapProfileToUser(data.user, profileRes.data), error: null };
+    } catch (err: any) {
+      return { user: null, error: err.message };
     }
-    const newUser: User = {
-      id: `u_${Date.now()}`, name: userData.name || '', email,
-      phone: userData.phone || '', gender: userData.gender || '',
-      genderPreference: userData.genderPreference || 'no_preference',
-      seatPreference: 'window', busTypePreference: 'AC',
-      frequentRoutes: [], area: '', occupation: 'student',
-      role: 'commuter', notifTrips: true, notifCrowd: true,
-      notifBookings: true, createdAt: new Date().toISOString(),
-    };
-    REGISTERED_USERS[email] = { password, user: newUser };
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(newUser));
-    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify({ userId: newUser.id, email }));
-    return { user: newUser, error: null };
   },
 
   async signIn(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
-    await new Promise(r => setTimeout(r, 800));
-    const record = REGISTERED_USERS[email];
-    if (!record || record.password !== password) {
-      return { user: null, error: 'Invalid email or password.' };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (!data.user) throw new Error('Sign in failed.');
+
+      const { data: profileData } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+      return { user: mapProfileToUser(data.user, profileData), error: null };
+    } catch (err: any) {
+      return { user: null, error: err.message };
     }
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(record.user));
-    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify({ userId: record.user.id, email }));
-    return { user: record.user, error: null };
   },
 
   async signOut(): Promise<void> {
-    await AsyncStorage.removeItem(USER_KEY);
-    await AsyncStorage.removeItem(SESSION_KEY);
+    await supabase.auth.signOut();
   },
 
   async getSession(): Promise<{ userId: string; email: string } | null> {
-    try {
-      const raw = await AsyncStorage.getItem(SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      return { userId: session.user.id, email: session.user.email || '' };
     }
+    return null;
   },
 
   async getProfile(userId: string): Promise<User | null> {
-    try {
-      const raw = await AsyncStorage.getItem(USER_KEY);
-      if (!raw) return null;
-      const user: User = JSON.parse(raw);
-      return user.id === userId ? user : MOCK_USER;
-    } catch {
-      return null;
-    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== userId) return null;
+
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (!profile) return null;
+
+    return mapProfileToUser(user, profile);
   },
 
   async updateProfile(userId: string, updates: Partial<User>): Promise<{ data: User | null; error: string | null }> {
-    await new Promise(r => setTimeout(r, 500));
     try {
-      const raw = await AsyncStorage.getItem(USER_KEY);
-      const existing: User = raw ? JSON.parse(raw) : MOCK_USER;
-      const updated = { ...existing, ...updates };
-      await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
-      return { data: updated, error: null };
-    } catch {
-      return { data: null, error: 'Failed to update profile.' };
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || user.id !== userId) throw new Error('Not authorized');
+
+      const mappedUpdates = {
+        full_name: updates.name,
+        avatar_url: updates.avatarUrl,
+        phone: updates.phone,
+        gender: updates.gender,
+        gender_preference: updates.genderPreference,
+        seat_preference: updates.seatPreference,
+        bus_type_preference: updates.busTypePreference,
+        frequent_routes: updates.frequentRoutes,
+        area: updates.area,
+        occupation: updates.occupation,
+        notif_trips: updates.notifTrips,
+        notif_crowd: updates.notifCrowd,
+        notif_bookings: updates.notifBookings,
+      };
+
+      // Clean undefined values
+      Object.keys(mappedUpdates).forEach(k => {
+        if ((mappedUpdates as any)[k] === undefined) delete (mappedUpdates as any)[k];
+      });
+
+      const { error } = await supabase.from('profiles').update(mappedUpdates).eq('id', userId);
+      if (error) throw error;
+
+      const { data: newProfile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      return { data: mapProfileToUser(user, newProfile), error: null };
+    } catch (err: any) {
+      return { data: null, error: err.message };
     }
   },
 
-  async resetPassword(_email: string): Promise<{ error: string | null }> {
-    await new Promise(r => setTimeout(r, 800));
-    return { error: null };
+  async resetPassword(email: string): Promise<{ error: string | null }> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    return { error: error?.message || null };
   },
 };
