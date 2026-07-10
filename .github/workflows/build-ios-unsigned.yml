@@ -131,21 +131,18 @@ jobs:
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          NODE_ENV: production
         run: |
           set -eo pipefail
 
-          # Expo SDK 52 doesn't include @react-native-community/cli by default.
-          # Install it so 'react-native bundle' works.
-          npm install --no-save @react-native-community/cli
-
-          # Find the built .app (Xcode skips JS bundling when CODE_SIGNING_ALLOWED=NO)
+          # Find the built .app
           APP_PATH=$(ls -d ios/DerivedData/Build/Products/Release-iphoneos/*.app | head -n 1)
           echo "Injecting JS bundle into: $APP_PATH"
 
-          # Bundle JS exactly as the Xcode 'Bundle React Native code and images' phase would
-          NODE_ENV=production npx react-native bundle \
+          # Use Expo's own bundler - already installed, no extra deps, same thing Xcode calls
+          # This is identical to what the 'Bundle React Native code and images' build phase runs
+          npx expo export:embed \
             --platform ios \
-            --dev false \
             --entry-file index.js \
             --bundle-output "$APP_PATH/main.jsbundle" \
             --assets-dest "$APP_PATH/"
