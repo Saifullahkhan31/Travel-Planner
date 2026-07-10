@@ -147,9 +147,30 @@ jobs:
             --bundle-output "$APP_PATH/main.jsbundle" \
             --assets-dest "$APP_PATH/"
 
-          echo "--- Bundle injected ---"
-          ls -lh "$APP_PATH/main.jsbundle"
-          echo "-----------------------"
+          echo "--- Plain JS bundle created: $(ls -lh "$APP_PATH/main.jsbundle" | awk '{print $5}') ---"
+
+          # CRITICAL: Compile to Hermes bytecode (.hbc format).
+          # The native iOS app is built with Hermes engine which ONLY executes pre-compiled
+          # bytecode, not plain JavaScript. Without this step, Hermes fails silently → white screen.
+          echo "Compiling bundle to Hermes bytecode..."
+          HERMESC=$(find node_modules -name "hermesc" -type f 2>/dev/null | grep -v "\.dSYM\|\.bak" | head -1)
+          if [ -z "$HERMESC" ]; then
+            HERMESC=$(find ios/Pods -name "hermesc" -type f 2>/dev/null | head -1)
+          fi
+
+          if [ -n "$HERMESC" ]; then
+            echo "Found hermesc at: $HERMESC"
+            chmod +x "$HERMESC"
+            "$HERMESC" -emit-binary -out "$APP_PATH/main.jsbundle.hbc" "$APP_PATH/main.jsbundle"
+            mv "$APP_PATH/main.jsbundle.hbc" "$APP_PATH/main.jsbundle"
+            echo "Hermes bytecode compilation complete!"
+          else
+            echo "ERROR: hermesc binary not found! Hermes-enabled app will show white screen."
+            find node_modules -name "herm*" -type f 2>/dev/null | head -10
+            exit 1
+          fi
+
+          echo "--- Final bundle (Hermes bytecode): $(ls -lh "$APP_PATH/main.jsbundle" | awk '{print $5}') ---"
 
       - name: Package into .ipa
         run: |
