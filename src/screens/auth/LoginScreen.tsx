@@ -44,16 +44,6 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const handleDemoLogin = async () => {
-    setEmail('demo@iobm.edu.pk');
-    setPassword('Password1');
-    setLoading(true);
-    setError(null);
-    const { error: err } = await signIn('demo@iobm.edu.pk', 'Password1');
-    if (err) setError(err);
-    setLoading(false);
-  };
-
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
@@ -69,11 +59,6 @@ export default function LoginScreen({ navigation }: Props) {
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Sign in to your Smart Bus account</Text>
           </View>
-
-          {/* Demo Banner */}
-          <TouchableOpacity style={styles.demoBanner} onPress={handleDemoLogin} activeOpacity={0.8}>
-            <Text style={styles.demoText}>✦ Tap here to login with Demo Account</Text>
-          </TouchableOpacity>
 
           {/* Card */}
           <View style={styles.card}>
@@ -139,16 +124,6 @@ const styles = StyleSheet.create({
   },
   title   : { ...Typography.h2, marginBottom: Spacing.xs },
   subtitle: { ...Typography.body, color: Colors.textSecondary },
-  demoBanner: {
-    backgroundColor: Colors.primaryTint,
-    borderRadius   : BorderRadius.md,
-    paddingVertical: Spacing.md,
-    alignItems     : 'center',
-    marginBottom   : Spacing.lg,
-    borderWidth    : 1,
-    borderColor    : Colors.primary + '30',
-  },
-  demoText : { ...Typography.captionMed, color: Colors.primary },
   card: {
     backgroundColor: Colors.card,
     borderRadius   : BorderRadius.xl,

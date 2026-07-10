@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,8 +10,9 @@ import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
-import { MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
+import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
+import { Bus, Route } from '../../types';
 import ComfortScoreRing from '../../components/cards/ComfortScoreRing';
 import CrowdPill from '../../components/cards/CrowdPill';
 import Button from '../../components/common/Button';
@@ -33,8 +34,10 @@ function getReasonsForSuggestion(isRoutine: boolean, confidence: number, crowdLe
 export default function AITripSuggestionScreen({ navigation, route }: Props) {
   const { suggestionData: s } = route.params;
 
-  const bus = MOCK_BUSES.find(b => b.id === s.suggestedBusId);
-  const busRoute = MOCK_ROUTES.find(r => r.id === s.routeId);
+  const [bus, setBus] = React.useState<Bus | null>(null);
+  const [busRoute, setRoute] = React.useState<Route | null>(null);
+  const [aiText, setAiText] = React.useState<string | null>(null);
+  const [aiTextLoading, setAiTextLoading] = React.useState(true);
 
   // Alternatives: other suggestions on different routes
   const alternatives = aiService.getTripSuggestions('u1').filter(sg => sg.routeId !== s.routeId).slice(0, 2);
@@ -50,7 +53,42 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
       Animated.timing(opacityAnim, { toValue: 1,   duration: 400, useNativeDriver: true }),
       Animated.timing(confAnim,    { toValue: 1,   duration: 800, delay: 300, useNativeDriver: false }),
     ]).start();
-  }, []);
+
+    // Fetch live bus and route details
+    (async () => {
+      try {
+        let fetchedBus = null;
+        if (s.suggestedBusId) {
+          const { data } = await busService.getBusById(s.suggestedBusId);
+          if (data) {
+            fetchedBus = data;
+            setBus(data);
+          }
+        }
+        if (s.routeId) {
+          const { data } = await busService.getRouteById(s.routeId);
+          if (data) setRoute(data);
+        }
+        
+        // Fetch live AI suggestion text from FastAPI
+        const text = await aiService.getAISuggestionText(
+          'comfortable seat, smooth journey',
+          s.routeName.split(' → ')[0] ?? 'Lahore',
+          s.routeName.split(' → ')[1] ?? 'Islamabad',
+          s.departureTime,
+          s.crowdPrediction.crowdLevel,
+          s.comfortScore.score,
+          fetchedBus?.busType ?? 'AC',
+        );
+        setAiText(text);
+      } catch (err) {
+        console.error("Failed to load AI text:", err);
+        setAiText("Good time to travel. Crowd levels are manageable.");
+      } finally {
+        setAiTextLoading(false);
+      }
+    })();
+  }, [s]);
 
   const reasons = getReasonsForSuggestion(s.isRoutine, s.confidenceScore, s.crowdPrediction.crowdLevel);
 
@@ -61,13 +99,10 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
 
   const handleBook = () => {
     if (!bus || !busRoute) return;
-    (navigation as any).getParent()?.navigate('TicketsTab', {
-      screen: 'SeatSelection',
-      params: {
-        busId       : bus.id,
-        routeId     : busRoute.id,
-        travelDate  : new Date().toDateString(),
-      },
+    (navigation as any).navigate('SeatSelection', {
+      busId       : bus.id,
+      routeId     : busRoute.id,
+      travelDate  : new Date().toISOString().split('T')[0],
     });
   };
 
@@ -100,8 +135,10 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
           {/* Route */}
           <View style={styles.routeRow}>
             <View style={styles.routeEndpoint}>
-              <Text style={styles.routeCode}>{busRoute?.origin?.slice(0, 3).toUpperCase()}</Text>
-              <Text style={styles.routeCity}>{busRoute?.origin}</Text>
+              <Text style={styles.routeCode}>
+                {(busRoute?.origin ?? s.routeName.split(' → ')[0] ?? '').slice(0, 3).toUpperCase()}
+              </Text>
+              <Text style={styles.routeCity}>{busRoute?.origin ?? s.routeName.split(' → ')[0]}</Text>
             </View>
             <View style={styles.routeArrow}>
               <View style={styles.arrowLine} />
@@ -109,8 +146,10 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
               <View style={styles.arrowLine} />
             </View>
             <View style={[styles.routeEndpoint, { alignItems: 'flex-end' }]}>
-              <Text style={styles.routeCode}>{busRoute?.destination?.slice(0, 3).toUpperCase()}</Text>
-              <Text style={styles.routeCity}>{busRoute?.destination}</Text>
+              <Text style={styles.routeCode}>
+                {(busRoute?.destination ?? s.routeName.split(' → ')[1] ?? '').slice(0, 3).toUpperCase()}
+              </Text>
+              <Text style={styles.routeCity}>{busRoute?.destination ?? s.routeName.split(' → ')[1]}</Text>
             </View>
           </View>
 
@@ -119,12 +158,12 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
           {/* Details Grid */}
           <View style={styles.detailGrid}>
             {[
-              { icon: 'time-outline',   label: 'Departure',    value: s.departureTime },
-              { icon: 'speedometer-outline', label: 'ETA',     value: `${s.eta} min` },
-              { icon: 'cash-outline',   label: 'Est. Fare',    value: `PKR ${s.estimatedFare}` },
-              { icon: 'car-outline',    label: 'Bus Type',     value: bus?.busType ?? '—' },
-              { icon: 'person-outline', label: 'Driver',       value: bus?.driverName ?? '—' },
-              { icon: 'keypad-outline', label: 'Plate',        value: bus?.plateNumber ?? '—' },
+              { icon: 'time-outline',        label: 'Departure', value: s.departureTime },
+              { icon: 'speedometer-outline', label: 'ETA',       value: `${s.eta} min` },
+              { icon: 'cash-outline',        label: 'Est. Fare', value: `PKR ${s.estimatedFare}` },
+              { icon: 'car-outline',         label: 'Bus Type',  value: bus?.busType ?? s.comfortScore.label ?? '—' },
+              { icon: 'person-outline',      label: 'Driver',    value: bus?.driverName ?? '—' },
+              { icon: 'keypad-outline',      label: 'Plate',     value: bus?.plateNumber ?? '—' },
             ].map(d => (
               <View key={d.label} style={styles.detailItem}>
                 <Ionicons name={d.icon as any} size={13} color={Colors.textMuted} />
@@ -145,7 +184,7 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
             <View style={styles.scoreBlockDivider} />
             <View style={styles.scoreBlock}>
               <Text style={styles.scoreBlockLabel}>Crowd</Text>
-              <CrowdPill crowdLevel={s.crowdPrediction.crowdLevel} showDot />
+              <CrowdPill crowdLevel={s.crowdPrediction.crowdLevel} showDot style={{ alignSelf: 'center' }} />
               <Text style={styles.scoreBlockSub}>{s.crowdPrediction.occupancyPercentage}% full</Text>
             </View>
           </View>
@@ -171,6 +210,19 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
             <Animated.View style={[styles.confBarFill, { width: confWidth }]} />
           </View>
           <Text style={styles.confSub}>Based on your travel history and current conditions</Text>
+        </View>
+
+        {/* AI Insight Text Card */}
+        <Text style={styles.sectionTitle}>AI Insight</Text>
+        <View style={styles.aiInsightCard}>
+          <View style={styles.aiInsightHeader}>
+            <Ionicons name="sparkles" size={16} color={Colors.primary} />
+            <Text style={styles.aiInsightTitle}>SmartBusPlanner AI</Text>
+            {aiTextLoading && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 8 }} />}
+          </View>
+          <Text style={styles.aiInsightText}>
+            {aiTextLoading ? 'Generating personalized insight…' : aiText}
+          </Text>
         </View>
 
         {/* Alternative Buses */}
@@ -297,4 +349,22 @@ const styles = StyleSheet.create({
   },
   notNowBtn : { alignItems: 'center', paddingVertical: Spacing.sm },
   notNowText: { ...Typography.caption, color: Colors.textMuted },
+
+  aiInsightCard: {
+    backgroundColor: Colors.primaryTint,
+    borderRadius   : BorderRadius.xl,
+    padding        : Spacing.lg,
+    marginBottom   : Spacing.lg,
+    borderWidth    : 1,
+    borderColor    : Colors.primary + '30',
+    ...Shadows.card,
+  },
+  aiInsightHeader: {
+    flexDirection : 'row',
+    alignItems    : 'center',
+    gap           : Spacing.sm,
+    marginBottom  : Spacing.sm,
+  },
+  aiInsightTitle: { ...Typography.captionMed, color: Colors.primary, flex: 1 },
+  aiInsightText : { ...Typography.body, color: Colors.textPrimary, lineHeight: 22 },
 });

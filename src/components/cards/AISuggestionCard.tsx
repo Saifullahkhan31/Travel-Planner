@@ -10,10 +10,10 @@ import CrowdPill from './CrowdPill';
 import ComfortScoreRing from './ComfortScoreRing';
 
 interface AISuggestionCardProps {
-  suggestion : AITripSuggestion;
-  onPress    : () => void;
-  onBook?    : () => void;
-  style?     : ViewStyle;
+  suggestion: AITripSuggestion;
+  onPress: () => void;
+  onBook?: () => void;
+  style?: ViewStyle;
 }
 
 export default function AISuggestionCard({ suggestion: s, onPress, onBook, style }: AISuggestionCardProps) {
@@ -39,7 +39,9 @@ export default function AISuggestionCard({ suggestion: s, onPress, onBook, style
       <View style={styles.routeLine}>
         <View style={styles.routeDot} />
         <View style={styles.routeTrack}>
-          {[1, 2, 3].map(i => <View key={i} style={styles.routeSegment} />)}
+          <View style={styles.routeSegment} />
+          <Ionicons name="bus" size={14} color={Colors.primary} />
+          <View style={styles.routeSegment} />
         </View>
         <View style={[styles.routeDot, { backgroundColor: Colors.primary }]} />
       </View>
@@ -74,33 +76,33 @@ export default function AISuggestionCard({ suggestion: s, onPress, onBook, style
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius   : BorderRadius.xl,
-    padding        : Spacing.xl,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
     ...Shadows.float,
-    borderWidth    : 1,
-    borderColor    : Colors.primary + '20',
-    marginBottom   : Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+    marginBottom: Spacing.md,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
   aiBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primary, borderRadius: BorderRadius.full, paddingHorizontal: 8, paddingVertical: 3 },
-  aiText : { fontSize: 9, fontWeight: '700', color: Colors.white },
+  aiText: { fontSize: 9, fontWeight: '700', color: Colors.white },
   routinePill: { backgroundColor: Colors.successTint, borderRadius: BorderRadius.full, paddingHorizontal: 8, paddingVertical: 3 },
   routineText: { ...Typography.tiny, color: Colors.success, fontWeight: '600' },
 
   routeName: { ...Typography.h4, marginBottom: Spacing.sm },
 
-  routeLine   : { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
-  routeDot    : { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.border, borderWidth: 2, borderColor: Colors.primary },
-  routeTrack  : { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 4 },
-  routeSegment: { height: 2, width: '28%', backgroundColor: Colors.primary + '40', borderRadius: 1 },
+  routeLine: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
+  routeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.border, borderWidth: 2, borderColor: Colors.primary },
+  routeTrack: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 6 },
+  routeSegment: { height: 2, width: '43%', backgroundColor: Colors.primary + '40', borderRadius: 1 },
 
-  metaRow : { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   metaLeft: { flex: 1, gap: Spacing.xs },
   departure: { ...Typography.caption, color: Colors.textSecondary },
-  pillRow   : { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  fareText  : { ...Typography.captionMed, color: Colors.textPrimary },
+  pillRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  fareText: { ...Typography.captionMed, color: Colors.textPrimary },
   confidence: { ...Typography.tiny, color: Colors.primary, fontWeight: '600' },
 
-  bookBtn    : { marginTop: Spacing.md, backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  bookBtn: { marginTop: Spacing.md, backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   bookBtnText: { ...Typography.captionMed, color: Colors.white, fontWeight: '700' },
 });

@@ -10,7 +10,7 @@ import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
-import { MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
+import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import CrowdPill from '../../components/cards/CrowdPill';
@@ -21,23 +21,26 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'BusDetail'>;
 
 export default function BusDetailScreen({ navigation, route }: Props) {
   const { busId, routeId } = route.params;
-  const [bus,     setBus]     = useState<Bus | null>(null);
-  const [busRoute, setRoute]  = useState<Route | null>(null);
-  const [crowd,   setCrowd]   = useState<CrowdPrediction | null>(null);
+  const [bus, setBus] = useState<Bus | null>(null);
+  const [busRoute, setRoute] = useState<Route | null>(null);
+  const [crowd, setCrowd] = useState<CrowdPrediction | null>(null);
   const [comfort, setComfort] = useState<ComfortScore | null>(null);
-  const [fare,    setFare]    = useState<FareEstimate | null>(null);
+  const [fare, setFare] = useState<FareEstimate | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const b = MOCK_BUSES.find(b => b.id === busId);
-    const r = MOCK_ROUTES.find(r => r.id === routeId);
-    if (b && r) {
-      setBus(b); setRoute(r);
-      setCrowd(aiService.predictCrowd(b.id, b.currentOccupancy, b.totalSeats));
-      setComfort(aiService.getComfortScore(b.id, b.currentOccupancy, b.totalSeats, b.busType));
-      setFare(aiService.estimateFare(r.id, b.busType, r.distance));
-    }
-    setTimeout(() => setLoading(false), 500);
+    (async () => {
+      const { data: b } = await busService.getBusById(busId);
+      const { data: r } = await busService.getRouteById(routeId);
+      if (b && r) {
+        setBus(b);
+        setRoute(r);
+        setCrowd(aiService.predictCrowd(b.id, b.currentOccupancy, b.totalSeats));
+        setComfort(aiService.getComfortScore(b.id, b.currentOccupancy, b.totalSeats, b.busType));
+        setFare(aiService.estimateFare(r.id, b.busType, r.distance));
+      }
+      setLoading(false);
+    })();
   }, [busId, routeId]);
 
   if (loading) {
@@ -111,7 +114,7 @@ export default function BusDetailScreen({ navigation, route }: Props) {
           {/* Crowd Prediction */}
           <View style={styles.scoreCard}>
             <Text style={styles.scoreLabel}>Crowd Level</Text>
-            {crowd && <CrowdPill crowdLevel={crowd.crowdLevel} />}
+            {crowd && <CrowdPill crowdLevel={crowd.crowdLevel} style={{ alignSelf: 'center' }} />}
             <View style={styles.occupancyBar}>
               <View style={[styles.occupancyFill, {
                 width: `${occupancyPct}%` as any,
@@ -123,13 +126,24 @@ export default function BusDetailScreen({ navigation, route }: Props) {
           </View>
         </View>
 
+        <TouchableOpacity
+          style={styles.aiPredictionButton}
+          onPress={() => {
+            // Navigate directly to the RootStack's Crowd Prediction screen
+            (navigation as any).navigate('CrowdPrediction', { busId: bus.id, routeId: busRoute.id });
+          }}
+        >
+          <Ionicons name="sparkles" size={16} color={Colors.white} />
+          <Text style={styles.aiPredictionButtonText}>View AI Crowd Prediction</Text>
+        </TouchableOpacity>
+
         {/* Fare Breakdown */}
         {fare && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Fare Breakdown</Text>
             {[
-              { label: 'Base Fare',      value: fare.baseFare },
-              { label: 'Distance Charge',value: fare.distanceCharge },
+              { label: 'Base Fare', value: fare.baseFare },
+              { label: 'Distance Charge', value: fare.distanceCharge },
               { label: 'Bus Type Surcharge', value: fare.busTypeCharge },
             ].map(item => (
               <View key={item.label} style={styles.fareRow}>
@@ -189,9 +203,10 @@ export default function BusDetailScreen({ navigation, route }: Props) {
         </View>
         <Button
           label="Select Seat"
-          onPress={() => (navigation as any).getParent()?.navigate('TicketsTab', {
-            screen: 'SeatSelection',
-            params: { busId: bus.id, routeId: busRoute.id, travelDate: new Date().toDateString() },
+          onPress={() => (navigation as any).navigate('SeatSelection', {
+            busId: bus.id, 
+            routeId: busRoute.id, 
+            travelDate: new Date().toISOString().split('T')[0]
           })}
           style={{ flex: 1, marginLeft: Spacing.md }}
           iconRight="arrow-forward"
@@ -202,49 +217,66 @@ export default function BusDetailScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe      : { flex: 1, backgroundColor: Colors.background },
-  content   : { paddingHorizontal: Spacing.screenPadding, paddingBottom: 120 },
+  safe: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: Spacing.screenPadding, paddingBottom: 120 },
   loadingView: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   busInfoCard: { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.lg, marginBottom: Spacing.lg, ...Shadows.card },
   busInfoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.md },
-  busPlate  : { ...Typography.h3 },
-  routeName : { ...Typography.caption, marginTop: 2 },
+  busPlate: { ...Typography.h3 },
+  routeName: { ...Typography.caption, marginTop: 2 },
   busTypeBadge: { borderRadius: BorderRadius.full, paddingHorizontal: 12, paddingVertical: 5 },
-  busTypeText : { fontSize: 12, fontWeight: '600' },
-  infoRow   : { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
-  infoItem  : { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  infoText  : { ...Typography.caption },
+  busTypeText: { fontSize: 12, fontWeight: '600' },
+  infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
+  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoText: { ...Typography.caption },
 
-  scoreRow  : { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
-  scoreCard : { flex: 1, backgroundColor: Colors.card, borderRadius: BorderRadius.lg, padding: Spacing.md, alignItems: 'center', ...Shadows.card },
+  aiPredictionButton: {
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: 8,
+  },
+  aiPredictionButtonText: {
+    ...Typography.body,
+    fontFamily: 'Inter-SemiBold',
+    color: Colors.white,
+  },
+
+  scoreRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  scoreCard: { flex: 1, backgroundColor: Colors.card, borderRadius: BorderRadius.lg, padding: Spacing.md, alignItems: 'center', ...Shadows.card },
   scoreLabel: { ...Typography.captionMed, fontWeight: '600', marginBottom: Spacing.sm, color: Colors.textPrimary },
   scoreSubLabel: { ...Typography.tiny, marginTop: Spacing.sm, textAlign: 'center' },
   occupancyBar: { width: '100%', height: 8, backgroundColor: Colors.border, borderRadius: 4, marginVertical: Spacing.sm, overflow: 'hidden' },
   occupancyFill: { height: '100%', borderRadius: 4 },
-  tiny       : { ...Typography.tiny },
+  tiny: { ...Typography.tiny },
 
-  card      : { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.lg, marginBottom: Spacing.lg, ...Shadows.card },
-  cardTitle : { ...Typography.h4, marginBottom: Spacing.md },
+  card: { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.lg, marginBottom: Spacing.lg, ...Shadows.card },
+  cardTitle: { ...Typography.h4, marginBottom: Spacing.md },
 
-  fareRow   : { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.divider },
-  fareLabel : { ...Typography.body, color: Colors.textSecondary },
-  fareVal   : { ...Typography.bodyMedium },
-  totalRow  : { borderBottomWidth: 0, marginTop: Spacing.xs },
+  fareRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.divider },
+  fareLabel: { ...Typography.body, color: Colors.textSecondary },
+  fareVal: { ...Typography.bodyMedium },
+  totalRow: { borderBottomWidth: 0, marginTop: Spacing.xs },
   totalLabel: { ...Typography.h4 },
-  totalVal  : { ...Typography.h4, color: Colors.primary },
+  totalVal: { ...Typography.h4, color: Colors.primary },
 
-  stopRow   : { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.sm },
+  stopRow: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.sm },
   stopDotCol: { alignItems: 'center', width: 16 },
-  stopDot   : { width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.textMuted },
-  stopLine  : { flex: 1, width: 2, backgroundColor: Colors.border, marginTop: 4 },
-  stopInfo  : { flex: 1, paddingBottom: Spacing.sm },
-  stopName  : { ...Typography.bodyMedium },
+  stopDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.textMuted },
+  stopLine: { flex: 1, width: 2, backgroundColor: Colors.border, marginTop: 4 },
+  stopInfo: { flex: 1, paddingBottom: Spacing.sm },
+  stopName: { ...Typography.bodyMedium },
   stopArrival: { ...Typography.tiny },
 
-  zoneRow   : { flexDirection: 'row', gap: Spacing.sm },
-  zoneBox   : { flex: 1, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: 'center', gap: 6 },
-  zoneLabel : { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  zoneRow: { flexDirection: 'row', gap: Spacing.sm },
+  zoneBox: { flex: 1, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: 'center', gap: 6 },
+  zoneLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
 
   stickyFooter: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -253,6 +285,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: Colors.border, ...Shadows.float,
     paddingBottom: Spacing.safeBottom,
   },
-  footerFare   : { ...Typography.h3, color: Colors.primary },
+  footerFare: { ...Typography.h3, color: Colors.primary },
   footerFareSub: { ...Typography.tiny },
 });

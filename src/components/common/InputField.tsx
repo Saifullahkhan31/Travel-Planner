@@ -25,12 +25,13 @@ interface InputFieldProps {
   autoCapitalize?   : 'none' | 'sentences' | 'words' | 'characters';
   returnKeyType?    : 'done' | 'go' | 'next' | 'search' | 'send';
   onSubmitEditing?  : () => void;
+  maxLength?        : number;
 }
 
 export default function InputField({
   label, value, onChangeText, placeholder, secureTextEntry, keyboardType,
   leftIcon, rightIcon, onRightIconPress, error, editable = true, style,
-  multiline, autoCapitalize, returnKeyType, onSubmitEditing,
+  multiline, autoCapitalize, returnKeyType, onSubmitEditing, maxLength,
 }: InputFieldProps) {
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -60,6 +61,7 @@ export default function InputField({
             keyboardType={keyboardType}
             editable={editable}
             multiline={multiline}
+            maxLength={maxLength}
             autoCapitalize={autoCapitalize ?? 'none'}
             returnKeyType={returnKeyType}
             onSubmitEditing={onSubmitEditing}

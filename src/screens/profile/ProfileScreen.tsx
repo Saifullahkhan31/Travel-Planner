@@ -106,13 +106,13 @@ export default function ProfileScreen({ navigation }: Props) {
     {
       id      : 'preferences',
       icon    : 'options-outline',
-      label   : 'Travel Preferences',
+      label   : 'Preferences',
       onPress : () => navigation.navigate('Preferences'),
     },
     {
-      id      : 'notifications',
-      icon    : 'notifications-outline',
-      label   : 'Notifications / Settings',
+      id      : 'settings',
+      icon    : 'settings-outline',
+      label   : 'Settings',
       onPress : () => navigation.navigate('Settings'),
     },
   ];

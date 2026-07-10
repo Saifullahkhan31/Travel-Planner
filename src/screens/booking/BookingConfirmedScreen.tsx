@@ -11,8 +11,11 @@ import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { bookingService } from '../../services/bookingService';
 import Button from '../../components/common/Button';
+import * as Notifications from 'expo-notifications';
 
-type Props = NativeStackScreenProps<TicketsStackParamList, 'BookingConfirmed'>;
+import { RootStackParamList } from '../../types';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'BookingConfirmed'>;
 
 export default function BookingConfirmedScreen({ navigation, route }: Props) {
   const { bookingId } = route.params;
@@ -24,6 +27,31 @@ export default function BookingConfirmedScreen({ navigation, route }: Props) {
     (async () => {
       const { data } = await bookingService.getBookingById(bookingId);
       setBooking(data);
+
+      if (data) {
+        // 1. Immediate Booking Confirmation
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Booking Confirmed! 🚌',
+            body: `Your seat has been reserved. Ref: ${bookingId.slice(0, 8).toUpperCase()}`,
+            data: { url: 'smartbusplanner://tickets' },
+          },
+          trigger: null,
+        });
+
+        // 2. Simulated Trip Reminder (10 seconds later for the demo)
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Trip Reminder ⏱️',
+            body: 'Your bus is departing soon. Please reach the terminal 15 mins early.',
+            data: { url: 'smartbusplanner://tickets' },
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: 10,
+          },
+        });
+      }
     })();
 
     Animated.sequence([
@@ -34,8 +62,18 @@ export default function BookingConfirmedScreen({ navigation, route }: Props) {
   }, []);
 
   const goHome = () => {
-    navigation.reset({ index: 0, routes: [{ name: 'MyBookings' }] });
-    (navigation as any).getParent()?.navigate('HomeTab');
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: 'MainTabs' as any,
+          params: {
+            screen: 'TicketsTab',
+            params: { screen: 'MyBookings' },
+          },
+        },
+      ],
+    });
   };
 
   return (

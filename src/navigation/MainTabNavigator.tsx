@@ -42,7 +42,17 @@ export default function MainTabNavigator() {
     >
       <Tab.Screen name="HomeTab"    component={HomeStack}    options={{ tabBarLabel: 'Home' }} />
       <Tab.Screen name="MapTab"     component={MapStack}     options={{ tabBarLabel: 'Map' }} />
-      <Tab.Screen name="TicketsTab" component={TicketsStack} options={{ tabBarLabel: 'Tickets' }} />
+      <Tab.Screen 
+        name="TicketsTab" 
+        component={TicketsStack} 
+        options={{ tabBarLabel: 'Tickets' }} 
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('TicketsTab', { screen: 'MyBookings' });
+          },
+        })}
+      />
       <Tab.Screen name="AITab"      component={AIStack}        options={{ tabBarLabel: 'Insights' }} />
       <Tab.Screen name="ProfileTab" component={ProfileStack}  options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>

@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { TicketsStackParamList, Seat, CrowdPrediction, ComfortScore } from '../../types';
+import { TicketsStackParamList, Seat, Bus, Route, CrowdPrediction, ComfortScore } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
-import { MOCK_BUSES, MOCK_ROUTES, MOCK_SEATS } from '../../services/mockData';
+import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import Button       from '../../components/common/Button';
@@ -27,16 +28,32 @@ export default function SeatSelectionScreen({ navigation, route }: Props) {
   const [crowd,    setCrowd]    = useState<CrowdPrediction | null>(null);
   const [loading,  setLoading]  = useState(true);
 
-  const bus = MOCK_BUSES.find(b => b.id === busId)!;
-  const busRoute = MOCK_ROUTES.find(r => r.id === routeId)!;
+  const [bus, setBus] = useState<Bus | null>(null);
+  const [busRoute, setRoute] = useState<Route | null>(null);
 
-  useEffect(() => {
-    const s = MOCK_SEATS[busId] ?? [];
-    setSeats(s);
-    setComfort(aiService.getComfortScore(busId, bus.currentOccupancy, bus.totalSeats, bus.busType));
-    setCrowd(aiService.predictCrowd(busId, bus.currentOccupancy, bus.totalSeats));
-    setTimeout(() => setLoading(false), 400);
-  }, [busId]);
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      setLoading(true);
+
+      (async () => {
+        const { data: b } = await busService.getBusById(busId);
+        const { data: r } = await busService.getRouteById(routeId);
+        const { data: s } = await busService.getSeatsByBus(busId, travelDate);
+        
+        if (isActive && b && r) {
+          setBus(b);
+          setRoute(r);
+          setSeats(s || []);
+          setComfort(aiService.getComfortScore(busId, b.currentOccupancy, b.totalSeats, b.busType));
+          setCrowd(aiService.predictCrowd(busId, b.currentOccupancy, b.totalSeats));
+          setLoading(false);
+        }
+      })();
+
+      return () => { isActive = false; };
+    }, [busId, routeId, travelDate])
+  );
 
   // Determine top-recommended seats
   const recommended = seats
@@ -68,16 +85,22 @@ export default function SeatSelectionScreen({ navigation, route }: Props) {
   };
 
   const handleConfirm = () => {
-    if (!selected) return;
-    const fare = aiService.estimateFare(routeId, bus.busType, busRoute.distance);
+    if (!selected || !bus || !busRoute) return;
     navigation.navigate('BookingSummary', {
-      busId, seatId: selected.id, routeId, travelDate,
+      busId,
+      seatId: selected.id,
+      routeId,
+      travelDate,
     });
+  };
+
+  const handleBack = () => {
+    (navigation as any).navigate('MainTabs', { screen: 'HomeTab' });
   };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="Select Your Seat" onBack={() => (navigation as any).getParent()?.navigate('HomeTab')} />
+      <ScreenHeader title="Select Your Seat" onBack={handleBack} />
 
       {/* Bus Strip */}
       <View style={styles.strip}>
@@ -113,7 +136,7 @@ export default function SeatSelectionScreen({ navigation, route }: Props) {
 
           {/* Seat Grid */}
           <View style={styles.seatGrid}>
-            {Array.from({ length: maxRow + 1 }, (_, row) => (
+            {Array.from({ length: maxRow }, (_, i) => i + 1).map(row => (
               <View key={row} style={styles.seatRow}>
                 {seats.filter(s => s.row === row).map(seat => {
                   const isRec = recommended.includes(seat.id) && seat.availabilityStatus;

@@ -3,14 +3,12 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { HomeStackParamList, Bus, CrowdPrediction, ComfortScore } from '../../types';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { HomeStackParamList, Bus, Route, CrowdPrediction, ComfortScore } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
-import { Shadows } from '../../constants/shadows';
-import { MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
+import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import BusCard      from '../../components/cards/BusCard';
@@ -20,8 +18,10 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'RouteResults'>;
 type Filter = 'All' | 'AC' | 'Non-AC' | 'Low Crowd' | 'Best Comfort';
 const FILTERS: Filter[] = ['All', 'AC', 'Non-AC', 'Low Crowd', 'Best Comfort'];
 
+// Each item must carry both its bus AND its route so BusCard can render routeName
 interface BusResult {
   bus    : Bus;
+  route  : Route;
   crowd  : CrowdPrediction;
   comfort: ComfortScore;
   fare   : number;
@@ -34,24 +34,21 @@ export default function RouteResultsScreen({ navigation, route }: Props) {
   const [filter,   setFilter]   = useState<Filter>('All');
 
   useEffect(() => {
-    const allBuses = MOCK_BUSES.filter(b => b.isActive);
-    const routeMatches = MOCK_ROUTES.filter(r =>
-      r.origin.toLowerCase().includes(origin.toLowerCase()) ||
-      r.destination.toLowerCase().includes(destination.toLowerCase()) ||
-      origin === '' || destination === ''
-    );
-    const buses = allBuses.filter(b => routeMatches.some(r => r.id === b.routeId));
-    const data: BusResult[] = buses.map(bus => {
-      const r = MOCK_ROUTES.find(r => r.id === bus.routeId)!;
-      return {
-        bus, route: r,
-        crowd  : aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats),
-        comfort: aiService.getComfortScore(bus.id, bus.currentOccupancy, bus.totalSeats, bus.busType),
-        fare   : aiService.estimateFare(r.id, bus.busType, r.distance).totalFare,
-      };
-    });
-    setTimeout(() => { setResults(data); setLoading(false); }, 700);
-  }, []);
+    (async () => {
+      const { data, error } = await busService.searchRoutes(origin, destination);
+      if (data && data.length > 0) {
+        const busResults: BusResult[] = data.map(item => ({
+          bus    : item.bus,
+          route  : item.route,
+          crowd  : aiService.predictCrowd(item.bus.id, item.bus.currentOccupancy, item.bus.totalSeats),
+          comfort: aiService.getComfortScore(item.bus.id, item.bus.currentOccupancy, item.bus.totalSeats, item.bus.busType),
+          fare   : aiService.estimateFare(item.route.id, item.bus.busType, item.route.distance).totalFare,
+        }));
+        setResults(busResults);
+      }
+      setLoading(false);
+    })();
+  }, [origin, destination]);
 
   const filtered = results.filter(r => {
     if (filter === 'AC') return r.bus.busType === 'AC';
@@ -103,24 +100,26 @@ export default function RouteResultsScreen({ navigation, route }: Props) {
         <View style={styles.emptyView}>
           <Text style={styles.emptyIcon}>🔍</Text>
           <Text style={styles.emptyTitle}>No buses found</Text>
-          <Text style={styles.emptySubtitle}>Try changing the filters or search different stops.</Text>
+          <Text style={styles.emptySubtitle}>
+            No trips are scheduled for this route right now. Try a different route or check back later.
+          </Text>
         </View>
       ) : (
         <FlatList
           data={filtered}
-          keyExtractor={item => item.bus.id}
+          keyExtractor={(item, idx) => `${item.bus.id}-${item.route.id}-${idx}`}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const r = MOCK_ROUTES.find(route => route.id === item.bus.routeId)!;
-            return (
-              <BusCard
-                bus={item.bus} route={r}
-                crowdPrediction={item.crowd} comfortScore={item.comfort} fare={item.fare}
-                onPress={() => navigation.navigate('BusDetail', { busId: item.bus.id, routeId: item.bus.routeId })}
-              />
-            );
-          }}
+          renderItem={({ item }) => (
+            <BusCard
+              bus={item.bus}
+              route={item.route}
+              crowdPrediction={item.crowd}
+              comfortScore={item.comfort}
+              fare={item.fare}
+              onPress={() => navigation.navigate('BusDetail', { busId: item.bus.id, routeId: item.route.id })}
+            />
+          )}
         />
       )}
     </SafeAreaView>
@@ -128,18 +127,18 @@ export default function RouteResultsScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe        : { flex: 1, backgroundColor: Colors.background },
+  safe          : { flex: 1, backgroundColor: Colors.background },
   filtersContent: { paddingHorizontal: Spacing.screenPadding, paddingVertical: Spacing.sm, gap: Spacing.sm },
-  filterChip  : { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.card },
+  filterChip    : { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.card },
   filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  filterText  : { ...Typography.caption, color: Colors.textSecondary },
+  filterText    : { ...Typography.caption, color: Colors.textSecondary },
   filterTextActive: { color: Colors.white, fontWeight: '600' },
-  resultsCount: { ...Typography.tiny, paddingHorizontal: Spacing.screenPadding, paddingBottom: Spacing.sm },
-  listContent : { paddingHorizontal: Spacing.screenPadding, paddingBottom: Spacing.safeBottom },
-  loadingView : { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
-  loadingText : { ...Typography.body, color: Colors.textSecondary },
-  emptyView   : { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xxxl },
-  emptyIcon   : { fontSize: 48, marginBottom: Spacing.md },
-  emptyTitle  : { ...Typography.h3, marginBottom: Spacing.sm },
-  emptySubtitle: { ...Typography.body, color: Colors.textSecondary, textAlign: 'center' },
+  resultsCount  : { ...Typography.tiny, paddingHorizontal: Spacing.screenPadding, paddingBottom: Spacing.sm },
+  listContent   : { paddingHorizontal: Spacing.screenPadding, paddingBottom: Spacing.safeBottom },
+  loadingView   : { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
+  loadingText   : { ...Typography.body, color: Colors.textSecondary },
+  emptyView     : { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xxxl },
+  emptyIcon     : { fontSize: 48, marginBottom: Spacing.md },
+  emptyTitle    : { ...Typography.h3, marginBottom: Spacing.sm },
+  emptySubtitle : { ...Typography.body, color: Colors.textSecondary, textAlign: 'center' },
 });

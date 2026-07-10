@@ -12,7 +12,8 @@ import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { aiService } from '../../services/aiService';
-import { MOCK_TRIP_HISTORY, MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
+import { bookingService } from '../../services/bookingService';
+import { useAuth } from '../../context/AuthContext';
 
 type Props = NativeStackScreenProps<AIStackParamList, 'TravelInsights'>;
 
@@ -33,55 +34,73 @@ function crowdAtHour(h: number): { level: 'low' | 'medium' | 'high'; pct: number
 const CROWD_COLORS = { low: Colors.success, medium: Colors.warning, high: Colors.error };
 
 export default function TravelInsightsScreen({ navigation }: Props) {
+  const { user } = useAuth();
   const [routines,    setRoutines]    = useState<RoutinePattern[]>([]);
   const [suggestions, setSuggestions] = useState<AITripSuggestion[]>([]);
   const [barAnims]   = useState(() => HOURS.map(() => new Animated.Value(0)));
   const learningAnim  = useState(() => new Animated.Value(0))[0];
 
-  // Stats from mock trip history
-  const totalTrips  = MOCK_TRIP_HISTORY.length;
-  const totalSpent  = MOCK_TRIP_HISTORY.reduce((s, t) => s + t.fareAmount, 0);
-  const uniqueRoutes = new Set(MOCK_TRIP_HISTORY.map(t => t.routeId)).size;
-
-  // Route usage count
-  const routeUsage: Record<string, { name: string; count: number; avgComfort: number }> = {};
-  MOCK_TRIP_HISTORY.forEach(t => {
-    if (!routeUsage[t.routeId]) {
-      routeUsage[t.routeId] = { name: t.routeName, count: 0, avgComfort: 0 };
-    }
-    routeUsage[t.routeId].count++;
-    const bus = MOCK_BUSES.find(b => b.routeId === t.routeId);
-    if (bus) {
-      const cs = aiService.getComfortScore(bus.id, bus.currentOccupancy, bus.totalSeats, bus.busType);
-      routeUsage[t.routeId].avgComfort = cs.score;
-    }
-  });
-  const routeUsageList = Object.values(routeUsage).sort((a, b) => b.count - a.count);
-  const maxUsage = Math.max(...routeUsageList.map(r => r.count), 1);
+  // Live stats from Supabase bookings
+  const [totalTrips,   setTotalTrips]   = useState(0);
+  const [totalSpent,   setTotalSpent]   = useState(0);
+  const [uniqueRoutes, setUniqueRoutes] = useState(0);
+  const [routeUsageList, setRouteUsageList] = useState<{ name: string; count: number; avgComfort: number }[]>([]);
 
   useEffect(() => {
-    setRoutines(aiService.detectRoutines(MOCK_TRIP_HISTORY));
-    setSuggestions(aiService.getTripSuggestions('u1'));
+    (async () => {
+      // Load live booking history for current user
+      const { data: bookings } = user
+        ? await bookingService.getUserBookings(user.id)
+        : { data: [] };
 
-    // Animate crowd bars
-    const anims = HOURS.map((h, i) =>
-      Animated.timing(barAnims[i], {
-        toValue: crowdAtHour(h).pct / 100,
-        duration: 600,
-        delay: i * 60,
-        useNativeDriver: false,
-      })
-    );
-    Animated.stagger(60, anims).start();
+      const history = bookings ?? [];
+      setTotalTrips(history.length);
+      setTotalSpent(history.filter(b => b.bookingStatus === 'completed').reduce((s, b) => s + b.fareAmount, 0));
+      const routes = new Set(history.map(b => b.routeName));
+      setUniqueRoutes(routes.size);
 
-    // Learning progress pulse
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(learningAnim, { toValue: 1, duration: 1400, useNativeDriver: false }),
-        Animated.timing(learningAnim, { toValue: 0.4, duration: 1400, useNativeDriver: false }),
-      ])
-    ).start();
-  }, []);
+      // Route usage
+      const counts: Record<string, { name: string; count: number }> = {};
+      history
+        .filter(b => b.routeName && b.routeName.trim() !== '' && b.routeName.trim().toLowerCase() !== 'route')
+        .forEach(b => {
+          if (!counts[b.routeName]) counts[b.routeName] = { name: b.routeName, count: 0 };
+          counts[b.routeName].count++;
+        });
+      const usageList = Object.values(counts)
+        .sort((a, b) => b.count - a.count)
+        .map(r => ({ ...r, avgComfort: 70 }));
+      setRouteUsageList(usageList);
+
+      // AI routines from history — skip corrupted/test entries with no real route name
+      const tripHistory = history
+        .filter(b => b.routeName && b.routeName.trim() !== '' && b.routeName.trim().toLowerCase() !== 'route')
+        .map(b => ({
+          id: b.id, userId: user?.id ?? '', routeId: b.routeId || b.routeName, routeName: b.routeName,
+          travelTime: b.travelDate, fareAmount: b.fareAmount, busId: b.busId || '',
+          seatSelected: b.seatNumber?.toString() ?? '', completionStatus: b.bookingStatus as any,
+        }));
+      setRoutines(aiService.detectRoutines(tripHistory));
+      setSuggestions(aiService.getTripSuggestions(user?.id ?? ''));
+
+      // Animate crowd bars
+      const anims = HOURS.map((h, i) =>
+        Animated.timing(barAnims[i], {
+          toValue: crowdAtHour(h).pct / 100,
+          duration: 600, delay: i * 60, useNativeDriver: false,
+        })
+      );
+      Animated.stagger(60, anims).start();
+
+      // Learning pulse
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(learningAnim, { toValue: 1, duration: 1400, useNativeDriver: false }),
+          Animated.timing(learningAnim, { toValue: 0.4, duration: 1400, useNativeDriver: false }),
+        ])
+      ).start();
+    })();
+  }, [user]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -155,15 +174,18 @@ export default function TravelInsightsScreen({ navigation }: Props) {
         {/* ── Most Used Routes ── */}
         <Text style={styles.sectionTitle}>Most Used Routes</Text>
         <View style={styles.card}>
-          {routeUsageList.map(r => (
+          {routeUsageList.map(r => {
+            const maxUsage = Math.max(...routeUsageList.map(x => x.count), 1);
+            return (
             <View key={r.name} style={styles.routeBarRow}>
               <Text style={styles.routeBarLabel} numberOfLines={1}>{r.name}</Text>
               <View style={styles.routeBarBg}>
-                <View style={[styles.routeBarFill, { width: (r.count / maxUsage) * BAR_MAX_W * 0.6 }]} />
+                <View style={[styles.routeBarFill, { width: `${Math.round((r.count / maxUsage) * 100)}%` as any }]} />
               </View>
               <Text style={styles.routeBarCount}>{r.count}×</Text>
             </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* ── Comfort by Route ── */}

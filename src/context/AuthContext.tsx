@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 import { authService } from '../services/authService';
+import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user     : User | null;
@@ -17,17 +18,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Build a minimal User from a Supabase auth session (no profile row needed)
+  function sessionUser(authUser: any): User {
+    return {
+      id    : authUser.id,
+      email : authUser.email ?? '',
+      name  : authUser.email?.split('@')[0] ?? 'Traveller',
+      avatarUrl: '',
+      phone : '',
+      gender: '',
+      genderPreference: 'no_preference',
+      seatPreference  : 'window',
+      busTypePreference: 'AC',
+      frequentRoutes  : [],
+      area       : '',
+      occupation : 'student',
+      role       : 'commuter',
+      notifTrips     : true,
+      notifCrowd     : true,
+      notifBookings  : true,
+      preferredDepartureTime: 'morning',
+      travelPriority : 'comfort',
+      budgetRange    : 'medium',
+      createdAt      : authUser.created_at ?? new Date().toISOString(),
+    };
+  }
+
   useEffect(() => {
-    (async () => {
-      try {
-        const session = await authService.getSession();
-        if (session) {
-          const profile = await authService.getProfile(session.userId);
-          setUser(profile);
+    let initialised = false;
+
+    // onAuthStateChange fires INITIAL_SESSION immediately when the client
+    // reads the persisted token from AsyncStorage. We use this as our single
+    // source of truth so we never need a separate getSession() call.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT' || !session) {
+          setUser(null);
+          setLoading(false);
+          initialised = true;
+          return;
         }
-      } catch {}
-      finally { setLoading(false); }
-    })();
+
+        // INITIAL_SESSION | SIGNED_IN | TOKEN_REFRESHED | USER_UPDATED
+        if (session?.user) {
+          try {
+            const profile = await authService.getProfile(session.user.id);
+            setUser(profile ?? sessionUser(session.user));
+          } catch {
+            // Network blip — keep user logged in with minimal info
+            setUser(sessionUser(session.user));
+          } finally {
+            if (!initialised) {
+              setLoading(false);
+              initialised = true;
+            }
+          }
+        }
+      }
+    );
+
+    // Safety: if listener never fires (e.g. no network + no cached token)
+    // clear loading after 3 seconds so the app doesn't hang on splash.
+    const timeout = setTimeout(() => {
+      if (!initialised) {
+        setLoading(false);
+        initialised = true;
+      }
+    }, 3000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

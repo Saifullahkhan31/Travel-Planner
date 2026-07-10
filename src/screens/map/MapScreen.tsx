@@ -1,19 +1,19 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Animated, Dimensions, Platform,
+  ScrollView, Animated, Dimensions, Platform, Modal, FlatList, TextInput
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { MapStackParamList } from '../../types';
+import { MapStackParamList, Bus, Route } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
-import { MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
+import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
 import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
 
@@ -26,7 +26,7 @@ type Props = { navigation: NativeStackNavigationProp<MapStackParamList, 'Map'> }
 
 // ─── Crowd colour helper ──────────────────────────────────────────────────────
 function crowdColour(level: 'low' | 'medium' | 'high'): string {
-  if (level === 'low')    return Colors.success;
+  if (level === 'low') return Colors.success;
   if (level === 'medium') return Colors.warning;
   return Colors.error;
 }
@@ -38,18 +38,37 @@ export default function MapScreen({ navigation }: Props) {
   const mapRef = useRef<MapView>(null);
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
+  const [buses, setBuses] = useState<Bus[]>([]);
+  const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
-  const [selectedBus,   setSelectedBus  ] = useState<string | null>(null);
-  const [showAll,       setShowAll      ] = useState(true);
+  const [selectedBus, setSelectedBus] = useState<string | null>(null);
+  const [showRouteModal, setShowRouteModal] = useState(false);
+  const [routeSearch, setRouteSearch] = useState('');
+
+  const insets = useSafeAreaInsets();
+
+  // ── Fetch live data from Supabase ─────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const { data: busData } = await busService.getAllActiveBuses();
+      const { data: routeData } = await busService.getAllRoutes();
+      if (busData) setBuses(busData);
+      if (routeData) setRoutes(routeData);
+    })();
+  }, []);
 
   // ── Computed ──────────────────────────────────────────────────────────────
-  const visibleBuses = showAll
-    ? MOCK_BUSES
-    : MOCK_BUSES.filter(b => selectedRoute ? b.routeId === selectedRoute : true);
+  const visibleBuses = selectedRoute
+    ? buses.filter(b => b.routeId === selectedRoute)
+    : buses;
 
-  const selectedBusData = MOCK_BUSES.find(b => b.id === selectedBus);
+  const filteredRoutes = routes.filter(r =>
+    r.routeName.toLowerCase().includes(routeSearch.toLowerCase())
+  );
+
+  const selectedBusData = buses.find(b => b.id === selectedBus);
   const selectedBusRoute = selectedBusData
-    ? MOCK_ROUTES.find(r => r.id === selectedBusData.routeId)
+    ? routes.find(r => r.id === selectedBusData.routeId)
     : null;
   const selectedCrowd = selectedBusData
     ? aiService.predictCrowd(selectedBusData.id, selectedBusData.currentOccupancy, selectedBusData.totalSeats)
@@ -61,10 +80,10 @@ export default function MapScreen({ navigation }: Props) {
   // ── Sheet animation ───────────────────────────────────────────────────────
   useEffect(() => {
     Animated.spring(sheetAnim, {
-      toValue  : selectedBus ? 1 : 0,
+      toValue: selectedBus ? 1 : 0,
       useNativeDriver: true,
-      tension  : 80,
-      friction : 12,
+      tension: 80,
+      friction: 12,
     }).start();
   }, [selectedBus]);
 
@@ -73,21 +92,7 @@ export default function MapScreen({ navigation }: Props) {
     const next = selectedRoute === routeId ? null : routeId;
     setSelectedRoute(next);
     setSelectedBus(null);
-
-    if (next) {
-      const route = MOCK_ROUTES.find(r => r.id === next);
-      if (route && route.stops.length > 0) {
-        const midStop = route.stops[Math.floor(route.stops.length / 2)];
-        mapRef.current?.animateToRegion({
-          latitude      : midStop.latitude,
-          longitude     : midStop.longitude,
-          latitudeDelta : 3.0,
-          longitudeDelta: 3.0,
-        }, 600);
-      }
-    } else {
-      mapRef.current?.animateToRegion(PAKISTAN_REGION, 600);
-    }
+    if (!next) mapRef.current?.animateToRegion(PAKISTAN_REGION, 600);
   }, [selectedRoute]);
 
   const handleMarkerPress = useCallback((busId: string) => {
@@ -119,51 +124,42 @@ export default function MapScreen({ navigation }: Props) {
         {Platform.OS === 'android' && (
           <UrlTile urlTemplate={OSM_TILE_URL} zIndex={-1} />
         )}
-        {/* Route polylines */}
-        {MOCK_ROUTES.map((route, idx) => {
+        {/* Route polylines — live from Supabase & OSRM */}
+        {routes.map((route, idx) => {
           const isActive = selectedRoute === null || selectedRoute === route.id;
+          if (!isActive || !route.routePath) return null;
           return (
             <Polyline
-              key={route.id}
-              coordinates={route.stops.map(s => ({ latitude: s.latitude, longitude: s.longitude }))}
-              strokeColor={isActive ? ROUTE_COLOURS[idx % ROUTE_COLOURS.length] : Colors.border}
-              strokeWidth={isActive ? 3 : 1.5}
+              key={`poly-${route.id}`}
+              coordinates={route.routePath}
+              strokeColor={ROUTE_COLOURS[idx % ROUTE_COLOURS.length]}
+              strokeWidth={selectedRoute === route.id ? 4 : 2}
+              zIndex={selectedRoute === route.id ? 10 : 1}
             />
           );
         })}
 
-        {/* Stop markers */}
-        {selectedRoute && MOCK_ROUTES
-          .find(r => r.id === selectedRoute)
-          ?.stops.map(stop => (
-            <Marker
-              key={stop.id}
-              coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
-              anchor={{ x: 0.5, y: 0.5 }}
-            >
-              <View style={styles.stopDot} />
-            </Marker>
-          ))
+        {/* Bus markers — null guard for missing GPS */}
+        {visibleBuses
+          .filter(bus => bus.gpsLocation?.latitude && bus.gpsLocation?.longitude)
+          .map(bus => {
+            const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
+            const isSelected = bus.id === selectedBus;
+            return (
+              <Marker
+                key={bus.id}
+                coordinate={bus.gpsLocation}
+                anchor={{ x: 0.5, y: 0.5 }}
+                onPress={() => handleMarkerPress(bus.id)}
+              >
+                <View style={[styles.busMarker, isSelected && styles.busMarkerSelected]}>
+                  <Text style={styles.busEmoji}>🚌</Text>
+                  <View style={[styles.crowdDot, { backgroundColor: crowdColour(crowd.crowdLevel) }]} />
+                </View>
+              </Marker>
+            );
+          })
         }
-
-        {/* Bus markers */}
-        {visibleBuses.map(bus => {
-          const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
-          const isSelected = bus.id === selectedBus;
-          return (
-            <Marker
-              key={bus.id}
-              coordinate={bus.gpsLocation}
-              anchor={{ x: 0.5, y: 0.5 }}
-              onPress={() => handleMarkerPress(bus.id)}
-            >
-              <View style={[styles.busMarker, isSelected && styles.busMarkerSelected]}>
-                <Text style={styles.busEmoji}>🚌</Text>
-                <View style={[styles.crowdDot, { backgroundColor: crowdColour(crowd.crowdLevel) }]} />
-              </View>
-            </Marker>
-          );
-        })}
       </MapView>
 
       {/* ── Safe area header overlay ── */}
@@ -178,59 +174,93 @@ export default function MapScreen({ navigation }: Props) {
               <Text style={styles.liveText}>LIVE</Text>
             </View>
           </View>
-          {/* All / My Route toggle */}
+          {/* Route Selector Trigger (Top Right) */}
           <TouchableOpacity
-            style={styles.toggleBtn}
+            style={[styles.headerFilterBtn, selectedRoute ? { backgroundColor: Colors.primary } : {}]}
             activeOpacity={0.8}
-            onPress={() => setShowAll(p => !p)}
+            onPress={() => setShowRouteModal(true)}
           >
-            <Text style={styles.toggleText}>{showAll ? 'All Buses' : 'Filtered'}</Text>
             <Ionicons
-              name={showAll ? 'filter-outline' : 'filter'}
+              name={selectedRoute ? "filter" : "filter-outline"}
               size={14}
-              color={Colors.primary}
+              color={selectedRoute ? Colors.white : Colors.primary}
             />
+            <Text style={[styles.headerFilterText, selectedRoute ? { color: Colors.white } : {}]}>
+              {selectedRoute ? 'Filtered' : 'All Routes'}
+            </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Route chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipsScroll}
-          contentContainerStyle={styles.chipsContent}
-        >
-          {MOCK_ROUTES.map((route, idx) => {
-            const active = selectedRoute === route.id;
-            return (
-              <TouchableOpacity
-                key={route.id}
-                style={[
-                  styles.routeChip,
-                  active && { backgroundColor: ROUTE_COLOURS[idx % ROUTE_COLOURS.length] },
-                ]}
-                activeOpacity={0.8}
-                onPress={() => handleSelectRoute(route.id)}
-              >
-                <View style={[
-                  styles.chipDot,
-                  { backgroundColor: active ? Colors.white : ROUTE_COLOURS[idx % ROUTE_COLOURS.length] },
-                ]} />
-                <Text style={[styles.chipText, active && { color: Colors.white }]}>
-                  {route.routeName}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
       </SafeAreaView>
+
+      {/* ── Route Selection Modal ── */}
+      <Modal visible={showRouteModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingTop: Math.max(insets.top, Spacing.xl) }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select a Route</Text>
+              <TouchableOpacity onPress={() => setShowRouteModal(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalSearchContainer}>
+              <Ionicons name="search" size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search routes..."
+                value={routeSearch}
+                onChangeText={setRouteSearch}
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
+
+            <FlatList
+              data={filteredRoutes}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.modalListContent}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item, index }) => {
+                const active = selectedRoute === item.id;
+                return (
+                  <TouchableOpacity
+                    style={[styles.modalRouteItem, active && styles.modalRouteItemActive]}
+                    onPress={() => {
+                      handleSelectRoute(item.id);
+                      setShowRouteModal(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.modalRouteDot, { backgroundColor: ROUTE_COLOURS[index % ROUTE_COLOURS.length] }]} />
+                    <Text style={[styles.modalRouteText, active && styles.modalRouteTextActive]}>
+                      {item.routeName}
+                    </Text>
+                    {active && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+
+            {selectedRoute && (
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={styles.clearFilterBtn}
+                  onPress={() => { handleSelectRoute(selectedRoute); setShowRouteModal(false); }}
+                >
+                  <Text style={styles.clearFilterText}>Clear Filter</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Legend ── */}
       <View style={styles.legend}>
+        <Text style={[styles.legendText, { fontWeight: '700', marginRight: Spacing.xs }]}>Crowd:</Text>
         {[
-          { label: 'Low',    color: Colors.success },
+          { label: 'Low', color: Colors.success },
           { label: 'Medium', color: Colors.warning },
-          { label: 'High',   color: Colors.error   },
+          { label: 'High', color: Colors.error },
         ].map(item => (
           <View key={item.label} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: item.color }]} />
@@ -246,7 +276,7 @@ export default function MapScreen({ navigation }: Props) {
           {
             transform: [{
               translateY: sheetAnim.interpolate({
-                inputRange : [0, 1],
+                inputRange: [0, 1],
                 outputRange: [260, 0],
               }),
             }],
@@ -304,60 +334,60 @@ export default function MapScreen({ navigation }: Props) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PAKISTAN_REGION = {
-  latitude      : 30.3753,
-  longitude     : 69.3451,
-  latitudeDelta : 12.0,
+  latitude: 30.3753,
+  longitude: 69.3451,
+  latitudeDelta: 12.0,
   longitudeDelta: 12.0,
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  map      : { flex: 1 },
+  map: { flex: 1 },
 
   // Header overlay
   headerOverlay: {
     position: 'absolute',
-    top     : 0,
-    left    : 0,
-    right   : 0,
+    top: 0,
+    left: 0,
+    right: 0,
   },
   titleRow: {
-    flexDirection  : 'row',
-    alignItems     : 'center',
-    justifyContent : 'space-between',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.screenPadding,
-    paddingBottom  : Spacing.sm,
+    paddingBottom: Spacing.sm,
   },
   titleCard: {
-    flexDirection  : 'row',
-    alignItems     : 'center',
-    gap            : Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     backgroundColor: Colors.white,
-    borderRadius   : BorderRadius.full,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     ...Shadows.card,
   },
   titleText: { ...Typography.bodyMedium },
-  liveChip : {
-    flexDirection  : 'row',
-    alignItems     : 'center',
-    gap            : 4,
+  liveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: Colors.successTint,
-    borderRadius   : BorderRadius.full,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  liveDot : { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
   liveText: { fontSize: 10, fontWeight: '700', color: Colors.success },
 
   toggleBtn: {
-    flexDirection  : 'row',
-    alignItems     : 'center',
-    gap            : 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: Colors.white,
-    borderRadius   : BorderRadius.full,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     ...Shadows.card,
@@ -365,33 +395,33 @@ const styles = StyleSheet.create({
   toggleText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
 
   // Chips
-  chipsScroll : { },
+  chipsScroll: {},
   chipsContent: {
     paddingHorizontal: Spacing.screenPadding,
-    gap              : Spacing.sm,
-    paddingBottom    : Spacing.sm,
+    gap: Spacing.sm,
+    paddingBottom: Spacing.sm,
   },
   routeChip: {
-    flexDirection    : 'row',
-    alignItems       : 'center',
-    gap              : 5,
-    backgroundColor  : Colors.white,
-    borderRadius     : BorderRadius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
-    paddingVertical  : Spacing.sm,
+    paddingVertical: Spacing.sm,
     ...Shadows.card,
   },
-  chipDot : { width: 8, height: 8, borderRadius: 4 },
+  chipDot: { width: 8, height: 8, borderRadius: 4 },
   chipText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '500' },
 
   // Markers
   busMarker: {
-    width          : 40,
-    height         : 40,
+    width: 40,
+    height: 40,
     backgroundColor: Colors.white,
-    borderRadius   : BorderRadius.md,
-    alignItems     : 'center',
-    justifyContent : 'center',
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...Shadows.card,
   },
   busMarkerSelected: {
@@ -399,94 +429,202 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     ...Shadows.button,
   },
-  busEmoji : { fontSize: 20 },
-  crowdDot : {
-    width        : 8,
-    height       : 8,
-    borderRadius : 4,
-    position     : 'absolute',
-    top          : 2,
-    right        : 2,
-    borderWidth  : 1,
-    borderColor  : Colors.white,
+  busEmoji: { fontSize: 20 },
+  crowdDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    borderWidth: 1,
+    borderColor: Colors.white,
   },
   stopDot: {
-    width          : 12,
-    height         : 12,
-    borderRadius   : 6,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: Colors.primary,
-    borderWidth    : 2,
-    borderColor    : Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.white,
   },
 
   // Legend
   legend: {
-    position       : 'absolute',
-    bottom         : 200,
-    right          : Spacing.screenPadding,
+    position: 'absolute',
+    bottom: 200,
+    right: Spacing.screenPadding,
     backgroundColor: Colors.white,
-    borderRadius   : BorderRadius.md,
-    padding        : Spacing.sm,
-    gap            : 4,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    gap: 4,
     ...Shadows.card,
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot : { width: 8, height: 8, borderRadius: 4 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendText: { ...Typography.tiny, fontWeight: '500' },
 
   // Bottom sheet
   sheet: {
-    position       : 'absolute',
-    bottom         : 0,
-    left           : 0,
-    right          : 0,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: Colors.white,
-    borderTopLeftRadius : BorderRadius.xxl,
+    borderTopLeftRadius: BorderRadius.xxl,
     borderTopRightRadius: BorderRadius.xxl,
-    padding        : Spacing.lg,
-    paddingBottom  : Spacing.safeBottom + Spacing.lg,
+    padding: Spacing.lg,
+    paddingBottom: Spacing.safeBottom + Spacing.lg,
     ...Shadows.float,
   },
   sheetHandle: {
-    width          : 36,
-    height         : 4,
-    borderRadius   : 2,
+    width: 36,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: Colors.border,
-    alignSelf      : 'center',
-    marginBottom   : Spacing.md,
+    alignSelf: 'center',
+    marginBottom: Spacing.md,
   },
-  sheetTop  : { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
+  sheetTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
   sheetRoute: { ...Typography.h4, marginBottom: 2 },
   sheetPlate: { ...Typography.caption, color: Colors.textSecondary },
-  sheetMeta : { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
+  sheetMeta: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
   busTypePill: {
-    backgroundColor  : Colors.primaryTint,
-    borderRadius     : BorderRadius.full,
+    backgroundColor: Colors.primaryTint,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: 8,
-    paddingVertical  : 3,
+    paddingVertical: 3,
   },
   busTypeText: { fontSize: 11, fontWeight: '600', color: Colors.primary },
-  driverText : { ...Typography.tiny, color: Colors.textSecondary },
+  driverText: { ...Typography.tiny, color: Colors.textSecondary },
 
   sheetActions: { flexDirection: 'row', gap: Spacing.sm },
   trackBtn: {
-    flex           : 1,
-    height         : 48,
+    flex: 1,
+    height: 48,
     backgroundColor: Colors.primary,
-    borderRadius   : BorderRadius.md,
-    flexDirection  : 'row',
-    alignItems     : 'center',
-    justifyContent : 'center',
-    gap            : Spacing.sm,
+    borderRadius: BorderRadius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
     ...Shadows.button,
   },
   trackBtnText: { ...Typography.buttonLabel },
   closeBtn: {
-    width          : 48,
-    height         : 48,
+    width: 48,
+    height: 48,
     backgroundColor: Colors.background,
-    borderRadius   : BorderRadius.md,
-    alignItems     : 'center',
-    justifyContent : 'center',
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  headerFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    ...Shadows.card,
+  },
+  headerFilterText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-start',
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderBottomLeftRadius: BorderRadius.xl,
+    borderBottomRightRadius: BorderRadius.xl,
+    maxHeight: '75%',
+    paddingBottom: Spacing.md,
+    ...Shadows.float,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.screenPadding,
+    marginBottom: Spacing.md,
+  },
+  modalTitle: {
+    ...Typography.h3,
+  },
+  modalCloseBtn: {
+    padding: 2,
+  },
+  modalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    marginHorizontal: Spacing.screenPadding,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalSearchInput: {
+    flex: 1,
+    height: 48,
+    marginLeft: Spacing.sm,
+    ...Typography.body,
+    color: Colors.textPrimary,
+  },
+  modalListContent: {
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing.xl,
+  },
+  modalRouteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  modalRouteItemActive: {
+    backgroundColor: Colors.primaryTint,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    marginHorizontal: -Spacing.screenPadding,
+    borderBottomWidth: 0,
+  },
+  modalRouteDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: Spacing.md,
+  },
+  modalRouteText: {
+    flex: 1,
+    ...Typography.body,
+    color: Colors.textPrimary,
+  },
+  modalRouteTextActive: {
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  modalFooter: {
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  clearFilterBtn: {
+    backgroundColor: Colors.error + '1A', // transparent error
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+  },
+  clearFilterText: {
+    ...Typography.bodyMedium,
+    color: Colors.error,
+    fontWeight: '600',
   },
 });

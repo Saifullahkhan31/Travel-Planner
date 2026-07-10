@@ -3,18 +3,22 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   FlatList, RefreshControl, Dimensions, Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT, UrlTile } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { HomeStackParamList, Bus, Route, AITripSuggestion, CrowdPrediction, ComfortScore } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
-import { MOCK_BUSES, MOCK_ROUTES, MOCK_NOTIFICATIONS } from '../../services/mockData';
 import { aiService } from '../../services/aiService';
+import { busService } from '../../services/busService';
 import { useAuth } from '../../context/AuthContext';
+import { HOME_MAP_POLYLINE_COORDS, HOME_MAP_BUS_LOCATION } from '../../services/aiMockData';
+import { MOCK_NOTIFICATIONS } from '../../services/mockData';
 import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
 import CrowdPill from '../../components/cards/CrowdPill';
 import ComfortScoreRing from '../../components/cards/ComfortScoreRing';
@@ -27,25 +31,59 @@ type Props = { navigation: NativeStackNavigationProp<HomeStackParamList, 'Home'>
 
 export default function HomeScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const [suggestions, setSuggestions]   = useState<AITripSuggestion[]>([]);
-  const [refreshing,  setRefreshing]    = useState(false);
-  const [unreadCount, setUnreadCount]   = useState(0);
+  const [suggestions, setSuggestions] = useState<AITripSuggestion[]>([]);
+  const [liveBuses,   setLiveBuses]   = useState<Bus[]>([]);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Location State
-  const [currentCity, setCurrentCity] = useState('Pakistan');
+  const [currentCity, setCurrentCityState] = useState('Pakistan');
   const [locationModalVisible, setLocationModalVisible] = useState(false);
 
-  const load = useCallback(() => {
-    // Filter suggestions by city if applicable
-    const allSuggestions = aiService.getTripSuggestions(user?.id ?? '');
-    const filteredSuggestions = allSuggestions.filter(s => 
-      currentCity === 'Pakistan' || s.routeName.toLowerCase().includes(currentCity.toLowerCase())
-    );
-    setSuggestions(filteredSuggestions);
+  const [routeList, setRouteList] = useState<any[]>([]);
 
-    const unread = MOCK_NOTIFICATIONS.filter(n => !n.isRead && n.userId === 'u1').length;
-    setUnreadCount(unread);
+  useEffect(() => {
+    AsyncStorage.getItem('HomeScreen_CurrentCity').then(city => {
+      if (city) setCurrentCityState(city);
+    });
+  }, []);
+
+  const setCurrentCity = useCallback((city: string) => {
+    setCurrentCityState(city);
+    AsyncStorage.setItem('HomeScreen_CurrentCity', city);
+  }, []);
+
+  const load = useCallback(async () => {
+    // Fetch live buses and routes together
+    const { data: buses }  = await busService.getAllBuses();
+    const { data: routes } = await busService.getAllRoutes();
+
+    const busList   = buses  ?? [];
+    const rList = routes ?? [];
+
+    setRouteList(rList);
+    if (busList.length > 0) setLiveBuses(busList);
+
+    // Filter relevant buses before feeding to AI generator so it doesn't truncate prematurely
+    const relevantBuses = currentCity === 'Pakistan' 
+      ? busList 
+      : busList.filter(b => {
+          const matchingRoute = rList.find(r => r.id === b.routeId);
+          return matchingRoute?.origin?.toLowerCase() === currentCity.toLowerCase() || 
+                 matchingRoute?.routeName?.toLowerCase().startsWith(currentCity.toLowerCase());
+        });
+
+    // AI suggestions now reliably use live IDs from the targeted city pool
+    const targetedSuggestions = aiService.getTripSuggestions(user?.id ?? '', relevantBuses, rList);
+    setSuggestions(targetedSuggestions);
+
   }, [user, currentCity]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setUnreadCount(MOCK_NOTIFICATIONS.filter(n => !n.isRead).length);
+    }, [])
+  );
 
   useEffect(() => { load(); }, [load]);
 
@@ -73,9 +111,28 @@ export default function HomeScreen({ navigation }: Props) {
       .toUpperCase()
       .slice(0, 2);
 
+    // ── Intelligent Filtering ──
+    const validRoutes = routeList.filter(r => liveBuses.some(b => b.routeId === r.id && b.isActive));
+    let quickRoutes = currentCity === 'Pakistan' 
+      ? validRoutes 
+      : validRoutes.filter(r => r.origin?.toLowerCase() === currentCity.toLowerCase());
+
+    if (quickRoutes.length < 4 && currentCity !== 'Pakistan') {
+      const arrivingRoutes = validRoutes.filter(r => 
+        r.destination?.toLowerCase() === currentCity.toLowerCase() &&
+        !quickRoutes.find(qr => qr.id === r.id)
+      );
+      quickRoutes = [...quickRoutes, ...arrivingRoutes];
+    }
+    const displayRoutes = quickRoutes.slice(0, 4);
+
+    const displayBuses = liveBuses
+      .filter(bus => bus.isActive && routeList.some(r => r.id === bus.routeId))
+      .slice(0, 5);
+
     return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
@@ -134,11 +191,15 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* ── Quick Route Chips ── */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-          {MOCK_ROUTES.slice(0, 4).map(r => (
+          {displayRoutes.map((r, idx) => (
             <TouchableOpacity
-              key={r.id}
+              key={`${r.id}-${idx}`}
               style={styles.routeChip}
-              onPress={() => navigation.navigate('RouteResults', { origin: r.origin, destination: r.destination, date: new Date().toDateString() })}
+              onPress={() => navigation.navigate('RouteResults', {
+                origin: r.origin,
+                destination: r.destination,
+                date: new Date().toISOString().split('T')[0],
+              })}
               activeOpacity={0.7}
             >
               <Text style={styles.routeChipText} numberOfLines={1}>{r.routeName}</Text>
@@ -150,7 +211,7 @@ export default function HomeScreen({ navigation }: Props) {
         {topSuggestion && (
           <AISuggestionCard
             suggestion={topSuggestion}
-            onPress={() => (navigation as any).getParent()?.navigate('AITab', { screen: 'AITripSuggestion', params: { suggestionData: topSuggestion } })}
+            onPress={() => (navigation as any).navigate('AITripSuggestion', { suggestionData: topSuggestion })}
             onBook={() => navigation.navigate('BusDetail', { busId: topSuggestion.suggestedBusId, routeId: topSuggestion.routeId })}
           />
         )}
@@ -178,15 +239,15 @@ export default function HomeScreen({ navigation }: Props) {
             {Platform.OS === 'android' && (
               <UrlTile urlTemplate={OSM_TILE_URL} zIndex={-1} />
             )}
-            {/* Karachi → Hyderabad route polyline */}
+            {/* Karachi → Hyderabad decorative polyline (static highway coords) */}
             <Polyline
-              coordinates={MOCK_ROUTES[0].stops.map(s => ({ latitude: s.latitude, longitude: s.longitude }))}
+              coordinates={HOME_MAP_POLYLINE_COORDS}
               strokeColor={Colors.primary}
               strokeWidth={3}
             />
-            {/* First active bus */}
+            {/* Static bus marker for map preview */}
             <Marker
-              coordinate={MOCK_BUSES[0].gpsLocation}
+              coordinate={HOME_MAP_BUS_LOCATION}
               anchor={{ x: 0.5, y: 0.5 }}
             >
               <View style={styles.mapBusMarker}>
@@ -214,36 +275,31 @@ export default function HomeScreen({ navigation }: Props) {
         {/* ── Recommended Buses ── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recommended Buses</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Search')} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => (navigation as any).navigate('RecommendedBuses')} activeOpacity={0.7}>
             <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.busScroll}>
-          {MOCK_BUSES
-            .filter(bus => {
-              const route = MOCK_ROUTES.find(r => r.id === bus.routeId);
-              return currentCity === 'Pakistan' || route?.origin === currentCity;
+          {displayBuses.map((bus, idx) => {
+              const crowd   = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
+              const comfort = aiService.getComfortScore(bus.id, bus.currentOccupancy, bus.totalSeats, bus.busType);
+              const fare    = aiService.estimateFare(bus.routeId || 'r1', bus.busType, 200);
+              return (
+                <TouchableOpacity
+                  key={`${bus.id}-${idx}`}
+                  style={styles.miniCard}
+                  onPress={() => navigation.navigate('BusDetail', { busId: bus.id, routeId: bus.routeId || '' })}
+                  activeOpacity={0.7}
+                >
+                  <ComfortScoreRing score={comfort.score} size="sm" />
+                  <Text style={styles.miniRoute} numberOfLines={2}>{bus.plateNumber}</Text>
+                  <CrowdPill crowdLevel={crowd.crowdLevel} />
+                  <Text style={styles.miniFare}>PKR {fare.totalFare}</Text>
+                </TouchableOpacity>
+              );
             })
-            .slice(0, 5).map(bus => {
-            const route = MOCK_ROUTES.find(r => r.id === bus.routeId)!;
-            const crowd  = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
-            const comfort= aiService.getComfortScore(bus.id, bus.currentOccupancy, bus.totalSeats, bus.busType);
-            const fare   = aiService.estimateFare(route.id, bus.busType, route.distance);
-            return (
-              <TouchableOpacity
-                key={bus.id}
-                style={styles.miniCard}
-                onPress={() => navigation.navigate('BusDetail', { busId: bus.id, routeId: bus.routeId })}
-                activeOpacity={0.7}
-              >
-                <ComfortScoreRing score={comfort.score} size="sm" />
-                <Text style={styles.miniRoute} numberOfLines={2}>{route.routeName}</Text>
-                <CrowdPill crowdLevel={crowd.crowdLevel} />
-                <Text style={styles.miniFare}>PKR {fare.totalFare}</Text>
-              </TouchableOpacity>
-            );
-          })}
+          }
         </ScrollView>
 
         {/* ── Quick Actions ── */}
@@ -264,7 +320,7 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* ── Crowd Alert Banner ── */}
         <View style={styles.alertBanner}>
-          <Text style={styles.alertText}>🚨 <Text style={{ fontWeight: '700' }}>Crowd Alert:</Text> Bus KHI-5522 on IoBM → Gulshan is filling up fast. Book now!</Text>
+          <Text style={styles.alertText}>🚨 <Text style={{ fontWeight: '700' }}>Crowd Alert:</Text> Bus KHI-001 on Karachi → Hyderabad is filling up fast. Book now!</Text>
         </View>
 
         <LocationPickerModal
@@ -281,7 +337,7 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safe   : { flex: 1, backgroundColor: Colors.background },
   scroll : { flex: 1 },
-  content: { paddingHorizontal: Spacing.screenPadding, paddingBottom: Spacing.safeBottom },
+  content: { paddingHorizontal: Spacing.screenPadding, paddingBottom: Spacing.lg },
 
   // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: Spacing.lg, marginBottom: Spacing.lg },
@@ -382,8 +438,8 @@ const styles = StyleSheet.create({
   miniFare : { ...Typography.captionMed, color: Colors.primary, marginTop: Spacing.xs },
 
   // Actions Grid
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.lg },
-  actionBtn  : { width: '46%', padding: Spacing.md, borderRadius: BorderRadius.lg, alignItems: 'center', gap: 6 },
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: Spacing.sm, marginBottom: Spacing.lg },
+  actionBtn  : { width: '48%', padding: Spacing.md, borderRadius: BorderRadius.lg, alignItems: 'center', gap: 6 },
   actionLabel: { ...Typography.caption, fontWeight: '600' },
 
   // Alert

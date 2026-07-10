@@ -4,12 +4,15 @@ import { CrowdLevel } from '../../types';
 import { Colors } from '../../constants/colors';
 import { BorderRadius } from '../../constants/spacing';
 
+import { ViewStyle, StyleProp } from 'react-native';
+
 interface CrowdPillProps {
   crowdLevel: CrowdLevel;
   showDot?  : boolean;
+  style?    : StyleProp<ViewStyle>;
 }
 
-export default function CrowdPill({ crowdLevel, showDot = true }: CrowdPillProps) {
+export default function CrowdPill({ crowdLevel, showDot = true, style }: CrowdPillProps) {
   const config = {
     low   : { bg: Colors.successTint, text: Colors.success, label: 'Low Crowd' },
     medium: { bg: Colors.warningTint, text: Colors.warning, label: 'Medium Crowd' },
@@ -17,7 +20,7 @@ export default function CrowdPill({ crowdLevel, showDot = true }: CrowdPillProps
   }[crowdLevel];
 
   return (
-    <View style={[styles.pill, { backgroundColor: config.bg }]}>
+    <View style={[styles.pill, { backgroundColor: config.bg }, style]}>
       <Text style={[styles.label, { color: config.text }]}>
         {showDot ? '● ' : ''}{config.label}
       </Text>

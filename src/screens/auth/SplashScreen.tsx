@@ -72,7 +72,7 @@ export default function SplashScreen({ navigation }: Props) {
       <Animated.View style={{ opacity: textOpacity, alignItems: 'center' }}>
         <Text style={styles.appName}>Smart AI Bus</Text>
         <Text style={styles.appName2}>Travel Planner</Text>
-        <Text style={styles.tagline}>✦ Intelligent intercity commuting</Text>
+        <Text style={styles.tagline}>✦ Intelligent public transit</Text>
       </Animated.View>
 
       <View style={styles.dotsRow}>

@@ -13,9 +13,16 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.smartbusplanner.app"
     },
     "android": {
+      "package": "com.smartbusplanner.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDummyKeyForOSMTilesToPreventCrash12345"
+        }
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -23,8 +30,13 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "extra": {
+      "eas": {
+        "projectId": "a692736f-83b5-4030-b191-be518b5b2b5e"
+      }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

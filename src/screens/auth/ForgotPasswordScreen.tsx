@@ -29,20 +29,40 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
   const handleSend = async () => {
     if (!email.includes('@')) { setError('Enter a valid email.'); return; }
     setLoading(true); setError(null);
-    await authService.resetPassword(email);
+    const { error } = await authService.resetPassword(email);
     setLoading(false);
-    setStep(2);
+    if (error) {
+      setError(error);
+    } else {
+      setStep(2);
+    }
   };
 
   const handleReset = async () => {
     if (otp.length < 6) { setError('Enter the 6-digit OTP.'); return; }
     if (newPass.length < 8) { setError('Password must be at least 8 characters.'); return; }
     if (newPass !== confirm) { setError('Passwords do not match.'); return; }
+    
     setLoading(true); setError(null);
-    await new Promise(r => setTimeout(r, 1000));
+    
+    // 1. Verify OTP
+    const { error: otpError } = await authService.verifyResetOTP(email, otp);
+    if (otpError) {
+      setError('Invalid code. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    // 2. Update Password (user is logged in automatically after verifyOtp)
+    const { error: passError } = await authService.updatePassword(newPass);
     setLoading(false);
-    setSuccess(true);
-    setTimeout(() => navigation.navigate('Login'), 2000);
+    
+    if (passError) {
+      setError(passError);
+    } else {
+      setSuccess(true);
+      setTimeout(() => navigation.navigate('Login'), 2000);
+    }
   };
 
   return (

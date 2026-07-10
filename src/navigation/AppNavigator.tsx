@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import AuthNavigator from './AuthNavigator';
-import MainTabNavigator from './MainTabNavigator';
+import RootStack from './RootStack';
 import { Colors } from '../constants/colors';
 
 export default function AppNavigator() {
@@ -16,5 +16,5 @@ export default function AppNavigator() {
     );
   }
 
-  return user ? <MainTabNavigator /> : <AuthNavigator />;
+  return user ? <RootStack /> : <AuthNavigator />;
 }

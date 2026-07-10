@@ -6,6 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+import { Platform } from 'react-native';
+import { UrlTile } from 'react-native-maps';
 
 import { TicketsStackParamList, Booking } from '../../types';
 import { Colors } from '../../constants/colors';
@@ -13,44 +15,53 @@ import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { bookingService } from '../../services/bookingService';
-import { MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
+import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import Button from '../../components/common/Button';
 import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
-import { Platform } from 'react-native';
-import { UrlTile } from 'react-native-maps';
 
 type Props = NativeStackScreenProps<TicketsStackParamList, 'ActiveTicket'>;
 
+// Default map region centred on Pakistan
+const PAKISTAN_REGION = {
+  latitude: 30.3753, longitude: 69.3451,
+  latitudeDelta: 12.0, longitudeDelta: 12.0,
+};
+
 export default function ActiveTicketScreen({ navigation, route }: Props) {
   const { bookingId } = route.params;
-  const [booking, setBooking] = useState<Booking | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(3600); // Demo: 1 hr to departure
+  const [booking, setBooking]         = useState<Booking | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(3600);
+  const [crowdLevel, setCrowdLevel]   = useState<'low' | 'medium' | 'high'>('low');
 
-  // Fetch booking details
+  // Fetch booking + live bus crowd data
   useEffect(() => {
     (async () => {
       const { data } = await bookingService.getBookingById(bookingId);
-      if (data) setBooking(data);
+      if (data) {
+        setBooking(data);
+        // Fetch live bus for crowd prediction
+        if (data.busId) {
+          const { data: bus } = await busService.getBusById(data.busId);
+          if (bus) {
+            const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
+            setCrowdLevel(crowd.crowdLevel);
+          }
+        }
+      }
     })();
   }, [bookingId]);
 
   // Countdown timer
   useEffect(() => {
     const timer = setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      setSecondsLeft(prev => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
   }, []);
 
   if (!booking) return null;
-
-  const bus = MOCK_BUSES.find(b => b.id === booking.busId);
-  const busRoute = MOCK_ROUTES.find(r => r.id === booking.routeId);
-  if (!bus || !busRoute) return null;
-
-  const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
 
   const formatTime = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
@@ -59,19 +70,12 @@ export default function ActiveTicketScreen({ navigation, route }: Props) {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const initialRegion = {
-    latitude: busRoute.stops[0]?.latitude ?? bus.gpsLocation.latitude,
-    longitude: busRoute.stops[0]?.longitude ?? bus.gpsLocation.longitude,
-    latitudeDelta: 0.1,
-    longitudeDelta: 0.1,
-  };
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="Your Ticket" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        
+
         {/* Countdown Timer */}
         <View style={styles.timerCard}>
           <Text style={styles.timerLabel}>DEPARTS IN</Text>
@@ -79,71 +83,60 @@ export default function ActiveTicketScreen({ navigation, route }: Props) {
           <Text style={styles.timerSub}>Please arrive 15 minutes before departure.</Text>
         </View>
 
-        {/* Mini Map */}
+        {/* Mini Map — centred on Pakistan (bus GPS not always available) */}
         <View style={styles.mapContainer}>
           <MapView
             key={`map-${MAP_TYPE}`}
             style={styles.map}
             provider={MAP_PROVIDER}
             mapType={MAP_TYPE}
-            initialRegion={initialRegion}
+            initialRegion={PAKISTAN_REGION}
             scrollEnabled={false}
             zoomEnabled={false}
           >
             {Platform.OS === 'android' && (
               <UrlTile urlTemplate={OSM_TILE_URL} maximumZ={19} flipY={false} />
             )}
-            
-            <Polyline
-              coordinates={busRoute.stops}
-              strokeColor={Colors.primary}
-              strokeWidth={4}
-            />
-            {busRoute.stops.map((stop, i) => (
-              <Marker key={stop.id} coordinate={stop}>
-                <View style={[styles.stopDot, i === 0 || i === busRoute.stops.length - 1 ? styles.stopDotMain : null]} />
-              </Marker>
-            ))}
-            <Marker coordinate={bus.gpsLocation} zIndex={10}>
-              <View style={styles.busMarker}>
-                <Ionicons name="bus" size={16} color={Colors.white} />
-              </View>
-            </Marker>
           </MapView>
-          
-          <Button 
-            label="Track Live" 
-            onPress={() => (navigation as any).getParent()?.navigate('MapTab', { screen: 'LiveTracking', params: { busId: bus.id, bookingId } })}
+
+          <Button
+            label="Track Live"
+            onPress={() =>
+              (navigation as any).getParent()?.navigate('MapTab', {
+                screen: 'LiveTracking',
+                params: { busId: booking.busId, bookingId },
+              })
+            }
             style={styles.trackOverlayBtn}
             iconLeft="location-outline"
           />
         </View>
 
-        {/* Bus / Route Details */}
+        {/* Bus / Route Details — driven entirely from Supabase booking data */}
         <View style={styles.detailsCard}>
           <Text style={styles.routeName}>{booking.routeName}</Text>
           <Text style={styles.travelDate}>{booking.travelDate}</Text>
-          
+
           <View style={styles.divider} />
-          
+
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Seat</Text>
               <Text style={styles.infoValue}>{booking.seatNumber}</Text>
             </View>
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Bus</Text>
-              <Text style={styles.infoValue}>{bus.busType}</Text>
+              <Text style={styles.infoLabel}>Bus Type</Text>
+              <Text style={styles.infoValue}>{booking.busType}</Text>
             </View>
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Plate</Text>
-              <Text style={styles.infoValue}>{bus.plateNumber}</Text>
+              <Text style={styles.infoLabel}>Status</Text>
+              <Text style={styles.infoValue}>{booking.bookingStatus}</Text>
             </View>
           </View>
         </View>
 
         {/* Crowd Alert */}
-        {crowd.crowdLevel === 'high' && (
+        {crowdLevel === 'high' && (
           <View style={styles.alertCard}>
             <Ionicons name="warning" size={20} color={Colors.error} />
             <View style={{ flex: 1 }}>
@@ -157,9 +150,9 @@ export default function ActiveTicketScreen({ navigation, route }: Props) {
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Button 
-          label="View Full Ticket" 
-          onPress={() => navigation.navigate('DigitalTicket', { bookingId })} 
+        <Button
+          label="View Full Ticket"
+          onPress={() => navigation.navigate('DigitalTicket', { bookingId })}
           style={{ width: '100%' }}
         />
       </View>
@@ -170,7 +163,7 @@ export default function ActiveTicketScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   content: { paddingHorizontal: Spacing.screenPadding, paddingBottom: 100 },
-  
+
   timerCard: {
     backgroundColor: Colors.primaryTint,
     borderRadius: BorderRadius.lg,
@@ -192,9 +185,6 @@ const styles = StyleSheet.create({
     ...Shadows.card,
   },
   map: { flex: 1 },
-  stopDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.white, borderWidth: 2, borderColor: Colors.primary },
-  stopDotMain: { width: 14, height: 14, borderRadius: 7 },
-  busMarker: { backgroundColor: Colors.primary, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.white },
   trackOverlayBtn: { position: 'absolute', bottom: Spacing.md, left: Spacing.xl, right: Spacing.xl, ...Shadows.button },
 
   detailsCard: {

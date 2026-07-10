@@ -36,12 +36,21 @@ export default function ProfileSetupScreen({ navigation }: Props) {
   const [notifTrips,    setNT]  = useState(true);
   const [notifCrowd,    setNC]  = useState(true);
   const [notifBookings, setNB]  = useState(true);
-  const [loading,  setLoading]  = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleComplete = async () => {
     setLoading(true);
-    await updateUser({ area, occupation: occ, seatPreference: seatPref, busTypePreference: busType, notifTrips, notifCrowd, notifBookings });
+    setError(null);
+    await updateUser({
+      area, occupation: occ,
+      seatPreference: seatPref,
+      busTypePreference: busType,
+      notifTrips, notifCrowd, notifBookings,
+    });
     setLoading(false);
+    // Navigate to the main app regardless — profile is optional
+    (navigation as any).reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   return (

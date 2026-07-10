@@ -39,7 +39,13 @@ function timeAgo(iso: string): string {
 export default function NotificationsScreen({ navigation }: Props) {
   const [notifs, setNotifs] = useState<Notification[]>(MOCK_NOTIFICATIONS);
 
-  const markAll = () => setNotifs(notifs.map(n => ({ ...n, isRead: true })));
+  const markAll = () => {
+    const updated = notifs.map(n => ({ ...n, isRead: true }));
+    setNotifs(updated);
+    // Mutate the global mock array so HomeScreen sees the change,
+    // but it still resets to the original state when the app restarts.
+    MOCK_NOTIFICATIONS.forEach(n => { n.isRead = true; });
+  };
 
   const today     = notifs.filter(n => new Date(n.createdAt) > new Date(Date.now() - 86400000));
   const earlier   = notifs.filter(n => new Date(n.createdAt) <= new Date(Date.now() - 86400000));
@@ -76,7 +82,7 @@ export default function NotificationsScreen({ navigation }: Props) {
         onBack={() => navigation.goBack()}
         rightComponent={
           <TouchableOpacity onPress={markAll} activeOpacity={0.7}>
-            <Text style={styles.markAll}>Mark all</Text>
+            <Text style={styles.markAll}>Mark all read</Text>
           </TouchableOpacity>
         }
       />

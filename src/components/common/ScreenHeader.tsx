@@ -42,8 +42,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     backgroundColor: Colors.background,
   },
-  left : { width: 40 },
-  right: { width: 40, alignItems: 'flex-end' },
+  left : { minWidth: 40 },
+  right: { minWidth: 40, alignItems: 'flex-end' },
   center: { flex: 1, alignItems: 'center' },
   backBtn: {
     width        : 36,

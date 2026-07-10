@@ -7,7 +7,7 @@ import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
-import { MOCK_BUSES, MOCK_ROUTES, MOCK_SEATS } from '../../services/mockData';
+import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
 import { bookingService } from '../../services/bookingService';
 import { useAuth } from '../../context/AuthContext';
@@ -37,14 +37,21 @@ export default function BookingSummaryScreen({ navigation, route }: Props) {
   const [error,    setError]    = useState<string | null>(null);
 
   useEffect(() => {
-    const b = MOCK_BUSES.find(b => b.id === busId)!;
-    const r = MOCK_ROUTES.find(r => r.id === routeId)!;
-    const allSeats = MOCK_SEATS[busId] ?? [];
-    const s = allSeats.find(s => s.id === seatId)!;
-    setBus(b); setRoute(r); setSeat(s);
-    setFare(aiService.estimateFare(r.id, b.busType, r.distance));
-    setTimeout(() => setLoading(false), 300);
-  }, []);
+    (async () => {
+      const { data: b } = await busService.getBusById(busId);
+      const { data: r } = await busService.getRouteById(routeId);
+      const { data: allSeats } = await busService.getSeatsByBus(busId, travelDate);
+      const s = allSeats?.find(s => s.id === seatId);
+      
+      if (b && r && s) {
+        setBus(b);
+        setRoute(r);
+        setSeat(s);
+        setFare(aiService.estimateFare(r.id, b.busType, r.distance));
+      }
+      setLoading(false);
+    })();
+  }, [busId, seatId, routeId, travelDate]);
 
   const handleProceed = async () => {
     if (!user || !bus || !busRoute || !seat || !fare) return;

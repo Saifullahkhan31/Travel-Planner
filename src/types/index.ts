@@ -19,23 +19,27 @@ export type NotificationType =
 // ─── Core Entities ───────────────────────────────────────────────────────────
 
 export interface User {
-  id                : string;
-  name              : string;
-  email             : string;
-  phone             : string;
-  gender            : string;
-  genderPreference  : GenderPreference;
-  seatPreference    : SeatPosition;
-  busTypePreference : BusType;
-  frequentRoutes    : string[];
-  area              : string;
-  occupation        : OccupationType;
-  role              : UserRole;
-  avatarUrl?        : string;
-  notifTrips        : boolean;
-  notifCrowd        : boolean;
-  notifBookings     : boolean;
-  createdAt         : string;
+  id                     : string;
+  name                   : string;
+  email                  : string;
+  phone                  : string;
+  gender                 : string;
+  genderPreference       : GenderPreference;
+  seatPreference         : SeatPosition;
+  busTypePreference      : BusType;
+  frequentRoutes         : string[];
+  area                   : string;
+  occupation             : OccupationType;
+  role                   : UserRole;
+  avatarUrl?             : string;
+  notifTrips             : boolean;
+  notifCrowd             : boolean;
+  notifBookings          : boolean;
+  // Extended AI-context preferences
+  preferredDepartureTime?: string;  // 'early_morning' | 'morning' | 'afternoon' | 'evening' | 'night'
+  travelPriority?        : string;  // 'comfort' | 'speed' | 'cost' | 'crowd'
+  budgetRange?           : string;  // 'low' | 'medium' | 'high'
+  createdAt              : string;
 }
 
 export interface Bus {
@@ -57,6 +61,7 @@ export interface Route {
   origin            : string;
   destination       : string;
   stops             : Stop[];
+  routePath?        : GPSCoordinate[];
   distance          : number;
   estimatedDuration : number;
   baseFare          : number;
@@ -231,15 +236,27 @@ export type MapStackParamList = {
   RouteVisualization: { routeId: string };
 };
 
-export type TicketsStackParamList = {
-  MyBookings         : undefined;
-  ActiveTicket       : { bookingId: string };
-  DigitalTicket      : { bookingId: string };
+export type RootStackParamList = {
+  MainTabs           : undefined;
+  // Booking Flow
   SeatSelection      : { busId: string; routeId: string; travelDate: string };
   BookingSummary     : { busId: string; seatId: string; routeId: string; travelDate: string };
   QRPayment          : { bookingId: string; fareAmount: number };
   PaymentProcessing  : { bookingId: string; paymentId: string };
   BookingConfirmed   : { bookingId: string };
+  DigitalTicket      : { bookingId: string };
+  // AI Deep Screens
+  CrowdPrediction    : { busId: string; routeId: string };
+  ComfortScore       : { busId: string };
+  AITripSuggestion   : { suggestionData: AITripSuggestion };
+  
+  // Browsing
+  RecommendedBuses   : undefined;
+};
+
+export type TicketsStackParamList = {
+  MyBookings         : undefined;
+  ActiveTicket       : { bookingId: string };
   BookingCancellation: { bookingId: string };
   TravelHistory      : undefined;
   TripDetail         : { tripId: string };
@@ -247,16 +264,14 @@ export type TicketsStackParamList = {
 
 export type AIStackParamList = {
   TravelInsights  : undefined;
-  CrowdPrediction : { busId: string; routeId: string };
-  ComfortScore    : { busId: string };
-  AITripSuggestion: { suggestionData: AITripSuggestion };
 };
 
 export type ProfileStackParamList = {
-  Profile      : undefined;
-  EditProfile  : undefined;
-  Preferences  : undefined;
-  Settings     : undefined;
-  HelpSupport  : undefined;
-  PrivacyPolicy: undefined;
+  Profile        : undefined;
+  EditProfile    : undefined;
+  Preferences    : undefined;
+  Settings       : undefined;
+  HelpSupport    : undefined;
+  PrivacyPolicy  : undefined;
+  ChangePassword : undefined;
 };
