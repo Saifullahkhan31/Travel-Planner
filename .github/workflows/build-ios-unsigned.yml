@@ -47,7 +47,7 @@ jobs:
 
       - name: Verify .xcworkspace exists
         run: |
-          WORKSPACE=$(ls ios/*.xcworkspace 2>/dev/null | head -n 1)
+          WORKSPACE=$(ls -d ios/*.xcworkspace 2>/dev/null | head -n 1)
           if [ -z "$WORKSPACE" ]; then
             echo "ERROR: No .xcworkspace found! pod install may have failed."
             ls -la ios/
@@ -60,7 +60,7 @@ jobs:
           set -eo pipefail
           cd ios
 
-          WORKSPACE=$(ls *.xcworkspace | head -n 1)
+          WORKSPACE=$(ls -d *.xcworkspace | head -n 1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
           echo "Building: $WORKSPACE / scheme: $SCHEME"
 
