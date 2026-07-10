@@ -24,6 +24,9 @@ jobs:
       - name: Generate iOS project (Prebuild)
         env:
           EXPO_NO_GIT_STATUS: 1
+          # Supabase keys must be set at prebuild time so expo-constants embeds them into the app
+          EXPO_PUBLIC_SUPABASE_URL: "https://alnswuxcwivwbsambusc.supabase.co"
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_ekphhfF9GIfaiB5S3g2RBQ_4CjxUsNr"
         run: npx expo prebuild --platform ios --clean
 
       - name: Verify Podfile exists & Show ios folder
@@ -95,6 +98,17 @@ jobs:
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
           echo "Building: $WORKSPACE / scheme: $SCHEME"
 
+          # Export NODE_BINARY so Xcode's 'Bundle React Native code and images'
+          # build phase can find Node.js and actually bundle the JavaScript.
+          # Without this, the JS bundle is silently skipped → white screen + tiny IPA.
+          if [ -f .xcode.env.local ]; then
+            source .xcode.env.local
+          elif [ -f .xcode.env ]; then
+            source .xcode.env
+          fi
+          export NODE_BINARY=$(which node)
+          echo "NODE_BINARY set to: $NODE_BINARY"
+
           # Use -derivedDataPath so ALL build products (including .modulemap files)
           # stay in ONE consistent location. This fixes the ExpoModulesCore not found error
           # that happens when CONFIGURATION_BUILD_DIR splits intermediates across directories.
@@ -105,6 +119,7 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath ./DerivedData \
+            NODE_BINARY="$NODE_BINARY" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
