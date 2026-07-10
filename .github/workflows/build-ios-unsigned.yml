@@ -95,48 +95,34 @@ jobs:
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
           echo "Building: $WORKSPACE / scheme: $SCHEME"
 
-          # Install xcbeautify to get clean, human-readable build output
-          gem install xcbeautify --quiet 2>/dev/null || true
-
+          # Use -derivedDataPath so ALL build products (including .modulemap files)
+          # stay in ONE consistent location. This fixes the ExpoModulesCore not found error
+          # that happens when CONFIGURATION_BUILD_DIR splits intermediates across directories.
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            CONFIGURATION_BUILD_DIR=$(pwd)/build \
+            -derivedDataPath ./DerivedData \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_IDENTITY="" \
             PROVISIONING_PROFILE="" \
-            clean build 2>&1 | grep -E "error:|warning: .*error|Build FAILED|build failed|FAILED" | head -60 || true
-          
-          # Run actual build and capture exit code
-          xcodebuild \
-            -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            CONFIGURATION_BUILD_DIR=$(pwd)/build \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_IDENTITY="" \
-            PROVISIONING_PROFILE="" \
-            build
+            clean build
 
       - name: Package into .ipa
         run: |
           set -eo pipefail
           cd ios
 
-          echo "--- build/ contents ---"
-          ls -la build/
-          echo "-----------------------"
+          # The .app is now in DerivedData/Build/Products/Release-iphoneos/
+          echo "--- DerivedData Build Products ---"
+          ls DerivedData/Build/Products/
+          echo "----------------------------------"
 
-          APP_PATH=$(ls -d build/*.app | head -n 1)
+          APP_PATH=$(ls -d DerivedData/Build/Products/Release-iphoneos/*.app | head -n 1)
           echo "Found app: $APP_PATH"
 
           mkdir -p Payload
