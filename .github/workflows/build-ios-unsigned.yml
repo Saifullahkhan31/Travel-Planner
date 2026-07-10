@@ -140,9 +140,11 @@ jobs:
           echo "Injecting JS bundle into: $APP_PATH"
 
           # Use Expo's own bundler - already installed, no extra deps, same thing Xcode calls
-          # This is identical to what the 'Bundle React Native code and images' build phase runs
+          # --dev false is CRITICAL: without it, bundle includes React Fast Refresh code
+          # ($RefreshSig$, __DEV__=true) which tries to connect to Metro server → white screen
           npx expo export:embed \
             --platform ios \
+            --dev false \
             --entry-file index.ts \
             --bundle-output "$APP_PATH/main.jsbundle" \
             --assets-dest "$APP_PATH/"
