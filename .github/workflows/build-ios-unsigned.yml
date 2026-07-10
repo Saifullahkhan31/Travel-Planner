@@ -37,6 +37,40 @@ jobs:
           fi
           echo "Podfile found!"
 
+      - name: Patch Podfile (Fix expo-sharing Xcode 16.2 Swift compatibility)
+        run: |
+          python3 - << 'PYEOF'
+          import re
+
+          with open('ios/Podfile', 'r') as f:
+              content = f.read()
+
+          patch = """
+            # Injected fix: disable Swift warnings-as-errors for Xcode 16.2 compatibility
+            installer.pods_project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+                config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+              end
+            end
+          """
+
+          # Insert our patch before the react_native_post_install call in the post_install block
+          if 'react_native_post_install' in content:
+              content = content.replace('  react_native_post_install(installer', patch + '\n  react_native_post_install(installer', 1)
+              print("Podfile patched successfully!")
+          else:
+              # Fallback: append a new post_install block
+              content += '\npost_install do |installer|\n' + patch + '\nend\n'
+              print("Podfile patched with fallback post_install block!")
+
+          with open('ios/Podfile', 'w') as f:
+              f.write(content)
+          PYEOF
+          echo "--- Last 25 lines of patched Podfile ---"
+          tail -25 ios/Podfile
+
       - name: Install CocoaPods
         run: |
           cd ios
