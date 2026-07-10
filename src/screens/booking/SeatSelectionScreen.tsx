@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { TicketsStackParamList, Seat, Bus, Route, CrowdPrediction, ComfortScore } from '../../types';
+import { RootStackParamList, Seat, Bus, Route, CrowdPrediction, ComfortScore } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
@@ -16,7 +16,7 @@ import { aiService } from '../../services/aiService';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import Button       from '../../components/common/Button';
 
-type Props = NativeStackScreenProps<TicketsStackParamList, 'SeatSelection'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'SeatSelection'>;
 type ZoneFilter = 'no_preference' | 'female_only' | 'male_only';
 
 export default function SeatSelectionScreen({ navigation, route }: Props) {

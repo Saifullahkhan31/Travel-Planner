@@ -245,11 +245,6 @@ export type RootStackParamList = {
   PaymentProcessing  : { bookingId: string; paymentId: string };
   BookingConfirmed   : { bookingId: string };
   DigitalTicket      : { bookingId: string };
-  // AI Deep Screens
-  CrowdPrediction    : { busId: string; routeId: string };
-  ComfortScore       : { busId: string };
-  AITripSuggestion   : { suggestionData: AITripSuggestion };
-  
   // Browsing
   RecommendedBuses   : undefined;
 };
@@ -264,6 +259,9 @@ export type TicketsStackParamList = {
 
 export type AIStackParamList = {
   TravelInsights  : undefined;
+  CrowdPrediction : { busId: string; routeId: string };
+  ComfortScore    : { busId: string };
+  AITripSuggestion: { suggestionData: AITripSuggestion };
 };
 
 export type ProfileStackParamList = {

@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { AIStackParamList, CrowdPrediction } from '../../types';
+import { AIStackParamList, CrowdPrediction, Bus, Route } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
@@ -284,6 +284,8 @@ export default function CrowdPredictionScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safe   : { flex: 1, backgroundColor: Colors.background },
   content: { paddingHorizontal: Spacing.screenPadding },
+  loaderContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
+  loaderText: { ...Typography.caption, color: Colors.textMuted },
 
   routeStrip: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
