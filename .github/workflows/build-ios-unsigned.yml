@@ -24,9 +24,9 @@ jobs:
       - name: Generate iOS project (Prebuild)
         env:
           EXPO_NO_GIT_STATUS: 1
-          # Supabase keys must be set at prebuild time so expo-constants embeds them into the app
-          EXPO_PUBLIC_SUPABASE_URL: "https://alnswuxcwivwbsambusc.supabase.co"
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_ekphhfF9GIfaiB5S3g2RBQ_4CjxUsNr"
+          # Pulled from GitHub repo Secrets (Settings → Secrets → Actions)
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
         run: npx expo prebuild --platform ios --clean
 
       - name: Verify Podfile exists & Show ios folder
