@@ -44,13 +44,10 @@ jobs:
               content = f.read()
 
           patch = """
-            # Fix: Force Swift 5 mode for all pods to prevent Xcode 16.2 Swift 6 errors
+            # Fix: Force Swift 5 mode for ALL pods - prevents Xcode 16.2 Swift 6 strict mode errors
             installer.pods_project.targets.each do |target|
               target.build_configurations.each do |config|
-                swift_ver = config.build_settings['SWIFT_VERSION']
-                if swift_ver != nil && swift_ver != ''
-                  config.build_settings['SWIFT_VERSION'] = '5.0'
-                end
+                config.build_settings['SWIFT_VERSION'] = '5.0'
                 config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
                 config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
               end
@@ -98,6 +95,9 @@ jobs:
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
           echo "Building: $WORKSPACE / scheme: $SCHEME"
 
+          # Install xcbeautify to get clean, human-readable build output
+          gem install xcbeautify --quiet 2>/dev/null || true
+
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
@@ -110,7 +110,22 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_IDENTITY="" \
             PROVISIONING_PROFILE="" \
-            clean build
+            clean build 2>&1 | grep -E "error:|warning: .*error|Build FAILED|build failed|FAILED" | head -60 || true
+          
+          # Run actual build and capture exit code
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CONFIGURATION_BUILD_DIR=$(pwd)/build \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_IDENTITY="" \
+            PROVISIONING_PROFILE="" \
+            build
 
       - name: Package into .ipa
         run: |
