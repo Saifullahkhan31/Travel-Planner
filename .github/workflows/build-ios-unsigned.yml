@@ -127,6 +127,30 @@ jobs:
             PROVISIONING_PROFILE="" \
             clean build
 
+      - name: Inject JavaScript Bundle into .app
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          set -eo pipefail
+
+          # Find the built .app (Xcode skips JS bundling when CODE_SIGNING_ALLOWED=NO)
+          # We do it manually here instead
+          APP_PATH=$(ls -d ios/DerivedData/Build/Products/Release-iphoneos/*.app | head -n 1)
+          echo "Injecting JS bundle into: $APP_PATH"
+
+          # Bundle JS using the React Native bundler (same as the Xcode 'Bundle React Native code and images' phase)
+          NODE_ENV=production npx react-native bundle \
+            --platform ios \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output "$APP_PATH/main.jsbundle" \
+            --assets-dest "$APP_PATH/"
+
+          echo "--- Bundle injected ---"
+          ls -lh "$APP_PATH/main.jsbundle"
+          echo "-----------------------"
+
       - name: Package into .ipa
         run: |
           set -eo pipefail
@@ -139,6 +163,8 @@ jobs:
 
           APP_PATH=$(ls -d DerivedData/Build/Products/Release-iphoneos/*.app | head -n 1)
           echo "Found app: $APP_PATH"
+          echo "App size:"
+          du -sh "$APP_PATH"
 
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
