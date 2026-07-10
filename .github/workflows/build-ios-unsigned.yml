@@ -24,15 +24,16 @@ jobs:
       - name: Build Unsigned iOS App
         run: |
           cd ios
-          # Compile the app for physical devices (iphoneos) but force Xcode to skip code signing
+          # Compile for physical devices using Ad-Hoc anonymous signing (bypass certificates)
           xcodebuild -workspace SmartTravelPlanner.xcworkspace \
             -scheme SmartTravelPlanner \
             -configuration Release \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             CONFIGURATION_BUILD_DIR=$(pwd)/build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_IDENTITY="" \
+            CODE_SIGNING_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
             clean build
 
       - name: Package into .ipa
