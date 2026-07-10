@@ -143,7 +143,7 @@ jobs:
           # This is identical to what the 'Bundle React Native code and images' build phase runs
           npx expo export:embed \
             --platform ios \
-            --entry-file index.js \
+            --entry-file index.ts \
             --bundle-output "$APP_PATH/main.jsbundle" \
             --assets-dest "$APP_PATH/"
 
