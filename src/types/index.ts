@@ -245,6 +245,10 @@ export type RootStackParamList = {
   PaymentProcessing  : { bookingId: string; paymentId: string };
   BookingConfirmed   : { bookingId: string };
   DigitalTicket      : { bookingId: string };
+  // AI Flow (Global overlays)
+  CrowdPrediction    : { busId: string; routeId: string };
+  ComfortScore       : { busId: string };
+  AITripSuggestion   : { suggestionData: AITripSuggestion };
   // Browsing
   RecommendedBuses   : undefined;
 };

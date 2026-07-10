@@ -50,6 +50,8 @@ export default function CrowdPredictionScreen({ navigation, route }: Props) {
   const [apiComfort,   setApiComfort]   = useState<number | null>(null);
   const [loading,      setLoading]      = useState(true);
   const [isFromAPI,    setIsFromAPI]    = useState(false);
+  const [aiText,       setAiText]       = useState<string | null>(null);
+  const [aiTextLoading, setAiTextLoading] = useState(true);
 
   // Sibling buses on same route for comparison
   const [siblings, setSiblings] = useState<Bus[]>([]);
@@ -100,6 +102,20 @@ export default function CrowdPredictionScreen({ navigation, route }: Props) {
         setCrowd(result);
         setApiComfort(result.apiComfortScore);
         setIsFromAPI(result.confidenceScore === 0.91);
+        
+        // 3. Fetch natural language AI Insight text WITHOUT blocking the UI
+        aiService.getAISuggestionText(
+          'comfortable seat, smooth journey',
+          r.origin ?? 'Lahore',
+          r.destination ?? 'Islamabad',
+          new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          result.crowdLevel,
+          result.apiComfortScore ?? 70,
+          b.busType,
+        )
+        .then(text => setAiText(text))
+        .catch(() => setAiText("Good time to travel. Crowd levels are manageable."))
+        .finally(() => setAiTextLoading(false));
         
         Animated.timing(fillAnim, {
           toValue: result.occupancyPercentage / 100,
@@ -191,6 +207,19 @@ export default function CrowdPredictionScreen({ navigation, route }: Props) {
               {isFromAPI ? '  🤖 ML Model' : '  📱 Local'}
             </Text>
           </View>
+        </View>
+
+        {/* AI Insight Text Card */}
+        <Text style={styles.sectionTitle}>AI Insight</Text>
+        <View style={styles.aiInsightCard}>
+          <View style={styles.aiInsightHeader}>
+            <Ionicons name="sparkles" size={16} color={Colors.primary} />
+            <Text style={styles.aiInsightTitle}>SmartBusPlanner AI</Text>
+            {aiTextLoading && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 8 }} />}
+          </View>
+          <Text style={styles.aiInsightText}>
+            {aiTextLoading ? 'Generating personalized insight…' : aiText}
+          </Text>
         </View>
 
         {/* Hourly Chart */}
@@ -340,4 +369,22 @@ const styles = StyleSheet.create({
   compBarBg    : { flex: 1, height: 8, backgroundColor: Colors.border, borderRadius: 4, overflow: 'hidden' },
   compBarFill  : { height: '100%', borderRadius: 4 },
   compPct      : { ...Typography.tiny, width: 28, textAlign: 'right' },
+
+  aiInsightCard: {
+    backgroundColor: Colors.primaryTint,
+    borderRadius   : BorderRadius.xl,
+    padding        : Spacing.lg,
+    marginBottom   : Spacing.lg,
+    borderWidth    : 1,
+    borderColor    : Colors.primary + '30',
+    ...Shadows.card,
+  },
+  aiInsightHeader: {
+    flexDirection : 'row',
+    alignItems    : 'center',
+    gap           : Spacing.sm,
+    marginBottom  : Spacing.sm,
+  },
+  aiInsightTitle: { ...Typography.captionMed, color: Colors.primary, flex: 1 },
+  aiInsightText : { ...Typography.body, color: Colors.textPrimary, lineHeight: 22 },
 });

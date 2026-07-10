@@ -1,0 +1,51 @@
+name: Build Unsigned iOS IPA
+
+on:
+  workflow_dispatch: # Allows you to run this manually from the Actions tab
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate iOS project (Prebuild)
+        run: npx expo prebuild --platform ios
+
+      - name: Build Unsigned iOS App
+        run: |
+          cd ios
+          # Compile the app for physical devices (iphoneos) but force Xcode to skip code signing
+          xcodebuild -workspace SmartBusPlanner.xcworkspace \
+            -scheme SmartBusPlanner \
+            -configuration Release \
+            -sdk iphoneos \
+            CONFIGURATION_BUILD_DIR=$(pwd)/build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_IDENTITY="" \
+            clean build
+
+      - name: Package into .ipa
+        run: |
+          cd ios
+          # Create the Payload folder structure required for an .ipa file
+          mkdir Payload
+          cp -R build/SmartBusPlanner.app Payload/
+          # Zip it up into an .ipa file
+          zip -qr SmartBusPlanner.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartBusPlanner-Unsigned
+          path: ios/SmartBusPlanner.ipa
