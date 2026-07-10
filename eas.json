@@ -17,6 +17,10 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://alnswuxcwivwbsambusc.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_ekphhfF9GIfaiB5S3g2RBQ_4CjxUsNr"
       }
     },
     "production": {}
