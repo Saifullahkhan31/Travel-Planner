@@ -10,6 +10,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Xcode (Stable version for React Native)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4.0'
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
