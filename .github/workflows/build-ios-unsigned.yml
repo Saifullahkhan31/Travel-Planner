@@ -25,8 +25,8 @@ jobs:
         run: |
           cd ios
           # Compile the app for physical devices (iphoneos) but force Xcode to skip code signing
-          xcodebuild -workspace SmartBusPlanner.xcworkspace \
-            -scheme SmartBusPlanner \
+          xcodebuild -workspace SmartTravelPlanner.xcworkspace \
+            -scheme SmartTravelPlanner \
             -configuration Release \
             -sdk iphoneos \
             CONFIGURATION_BUILD_DIR=$(pwd)/build \
@@ -40,7 +40,7 @@ jobs:
           cd ios
           # Create the Payload folder structure required for an .ipa file
           mkdir Payload
-          cp -R build/SmartBusPlanner.app Payload/
+          cp -R build/SmartTravelPlanner.app Payload/
           # Zip it up into an .ipa file
           zip -qr SmartBusPlanner.ipa Payload
 
