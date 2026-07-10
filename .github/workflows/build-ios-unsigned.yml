@@ -1,7 +1,7 @@
 name: Build Unsigned iOS IPA
 
 on:
-  workflow_dispatch: # Allows you to run this manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
@@ -22,28 +22,48 @@ jobs:
         run: npm install
 
       - name: Generate iOS project (Prebuild)
+        env:
+          EXPO_NO_GIT_STATUS: 1
         run: npx expo prebuild --platform ios --clean
+
+      - name: Verify Podfile exists & Show ios folder
+        run: |
+          echo "--- Root ios/ folder contents ---"
+          ls -la ios/
+          echo "---------------------------------"
+          if [ ! -f ios/Podfile ]; then
+            echo "ERROR: Podfile not found! Prebuild may have failed."
+            exit 1
+          fi
+          echo "Podfile found!"
 
       - name: Install CocoaPods
         run: |
           cd ios
-          pod install
+          pod install --repo-update
+          echo "--- ios/ after pod install ---"
+          ls -la
+          echo "------------------------------"
+
+      - name: Verify .xcworkspace exists
+        run: |
+          WORKSPACE=$(ls ios/*.xcworkspace 2>/dev/null | head -n 1)
+          if [ -z "$WORKSPACE" ]; then
+            echo "ERROR: No .xcworkspace found! pod install may have failed."
+            ls -la ios/
+            exit 1
+          fi
+          echo "Workspace found: $WORKSPACE"
 
       - name: Build Unsigned iOS App
         run: |
+          set -eo pipefail
           cd ios
 
-          # Print directory so we can confirm the workspace was created
-          echo "--- ios/ Directory Contents ---"
-          ls -la
-          echo "-------------------------------"
-
-          # Dynamically detect the workspace and scheme names
           WORKSPACE=$(ls *.xcworkspace | head -n 1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-          echo "Building workspace: $WORKSPACE with scheme: $SCHEME"
+          echo "Building: $WORKSPACE / scheme: $SCHEME"
 
-          # Build for physical device, skipping all code signing requirements
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
@@ -56,19 +76,25 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_IDENTITY="" \
             PROVISIONING_PROFILE="" \
-            clean build 2>&1 | tail -200
+            clean build
 
       - name: Package into .ipa
         run: |
+          set -eo pipefail
           cd ios
-          echo "--- Build Output ---"
-          ls build/
-          echo "--------------------"
+
+          echo "--- build/ contents ---"
+          ls -la build/
+          echo "-----------------------"
+
+          APP_PATH=$(ls -d build/*.app | head -n 1)
+          echo "Found app: $APP_PATH"
+
           mkdir -p Payload
-          cp -R build/*.app Payload/
+          cp -R "$APP_PATH" Payload/
           zip -qr SmartBusPlanner-unsigned.ipa Payload
-          echo "IPA created successfully!"
           ls -lh SmartBusPlanner-unsigned.ipa
+          echo "SUCCESS: IPA is ready!"
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
