@@ -10,7 +10,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { TicketsStackParamList, Booking } from '../../types';
+import { RootStackParamList, Booking } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
@@ -18,7 +18,7 @@ import { Shadows } from '../../constants/shadows';
 import { bookingService } from '../../services/bookingService';
 import ScreenHeader from '../../components/common/ScreenHeader';
 
-type Props = NativeStackScreenProps<TicketsStackParamList, 'DigitalTicket'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'DigitalTicket'>;
 
 export default function DigitalTicketScreen({ navigation, route }: Props) {
   const { bookingId } = route.params;
@@ -46,7 +46,7 @@ export default function DigitalTicketScreen({ navigation, route }: Props) {
   if (!booking) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ScreenHeader title="Digital Ticket" onBack={() => navigation.navigate('MyBookings')} />
+        <ScreenHeader title="Digital Ticket" onBack={() => navigation.goBack()} />
         <View style={styles.loadingView}><Text style={Typography.body}>Ticket not found.</Text></View>
       </SafeAreaView>
     );
@@ -190,7 +190,7 @@ export default function DigitalTicketScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="Digital Ticket" onBack={() => navigation.navigate('MyBookings')} />
+      <ScreenHeader title="Digital Ticket" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 

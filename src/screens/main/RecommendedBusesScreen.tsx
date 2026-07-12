@@ -57,7 +57,13 @@ export default function RecommendedBusesScreen({ navigation }: Props) {
         crowdPrediction={crowd}
         comfortScore={comfort}
         fare={fare.totalFare}
-        onPress={() => (navigation as any).navigate('BusDetail', { busId: bus.id, routeId: route.id })}
+        onPress={() => (navigation as any).navigate('MainTabs', {
+          screen: 'HomeTab',
+          params: {
+            screen: 'BusDetail',
+            params: { busId: bus.id, routeId: route.id },
+          },
+        })}
       />
     );
   };
