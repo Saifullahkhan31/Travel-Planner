@@ -3,10 +3,11 @@
 export type CrowdLevel       = 'low' | 'medium' | 'high';
 export type BusType          = 'AC' | 'Non-AC' | 'Premium';
 export type GenderPreference = 'no_preference' | 'female_only' | 'male_only';
-export type BookingStatus    = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+export type BookingStatus    = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'boarded';
 export type PaymentStatus    = 'pending' | 'success' | 'failed';
 export type UserRole         = 'commuter' | 'driver' | 'admin';
-export type SeatPosition     = 'window' | 'aisle' | 'front' | 'back';
+export type SeatPosition     = 'window' | 'aisle' | 'no_preference';
+export type SeatLocation     = 'front' | 'back' | 'no_preference';
 export type OccupationType   = 'student' | 'professional' | 'worker' | 'other';
 export type NotificationType =
   | 'crowd_alert'
@@ -36,6 +37,7 @@ export interface User {
   notifCrowd             : boolean;
   notifBookings          : boolean;
   // Extended AI-context preferences
+  seatLocationPreference?: SeatLocation;
   preferredDepartureTime?: string;  // 'early_morning' | 'morning' | 'afternoon' | 'evening' | 'night'
   travelPriority?        : string;  // 'comfort' | 'speed' | 'cost' | 'crowd'
   budgetRange?           : string;  // 'low' | 'medium' | 'high'
@@ -232,7 +234,7 @@ export type HomeStackParamList = {
 
 export type MapStackParamList = {
   Map               : undefined;
-  LiveTracking      : { busId: string; bookingId?: string };
+  LiveTracking      : { busId: string; bookingId?: string; returnTo?: string };
   RouteVisualization: { routeId: string };
 };
 

@@ -3,10 +3,13 @@ import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import AuthNavigator from './AuthNavigator';
 import RootStack from './RootStack';
+import DriverNavigator from './DriverNavigator';
 import { Colors } from '../constants/colors';
+import { useAlertsListener } from '../hooks/useAlertsListener';
 
 export default function AppNavigator() {
   const { user, loading } = useAuth();
+  useAlertsListener();
 
   if (loading) {
     return (
@@ -16,5 +19,11 @@ export default function AppNavigator() {
     );
   }
 
-  return user ? <RootStack /> : <AuthNavigator />;
+  if (!user) return <AuthNavigator />;
+  
+  if (user.role === 'driver') {
+    return <DriverNavigator />;
+  }
+  
+  return <RootStack />;
 }

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Platform, KeyboardAvoidingView, Alert,
+  Platform, KeyboardAvoidingView, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -26,6 +27,8 @@ export default function LoginScreen({ navigation }: Props) {
   const [showPass, setShowPass] = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
+  
+  const [isDriverMode, setIsDriverMode] = useState(false);
 
   const handleSignIn = async () => {
     if (!email.trim() || !password.trim()) {
@@ -57,7 +60,7 @@ export default function LoginScreen({ navigation }: Props) {
               <Text style={{ fontSize: 32 }}>🚌</Text>
             </View>
             <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to your Smart Bus account</Text>
+            <Text style={styles.subtitle}>Sign in to your Smart Bus {isDriverMode ? 'Driver ' : ''}account</Text>
           </View>
 
           {/* Card */}
@@ -72,7 +75,7 @@ export default function LoginScreen({ navigation }: Props) {
               label="Email Address"
               value={email}
               onChangeText={setEmail}
-              placeholder="you@example.com"
+              placeholder={isDriverMode ? "driver@smartbusplanner.com" : "you@example.com"}
               keyboardType="email-address"
               leftIcon="mail-outline"
               autoCapitalize="none"
@@ -99,11 +102,23 @@ export default function LoginScreen({ navigation }: Props) {
             <Button label="Sign In" onPress={handleSignIn} loading={loading} />
           </View>
 
-          {/* Register link */}
+          {/* Links */}
           <View style={styles.registerRow}>
             <Text style={styles.registerText}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7}>
               <Text style={styles.registerLink}>Create one</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.driverRow}>
+            <Text style={styles.registerText}>{isDriverMode ? 'Are you a commuter? ' : 'Are you a driver? '}</Text>
+            <TouchableOpacity onPress={() => {
+              setIsDriverMode(!isDriverMode);
+              setEmail('');
+              setPassword('');
+              setError(null);
+            }} activeOpacity={0.7}>
+              <Text style={styles.registerLink}>{isDriverMode ? 'Login as Commuter' : 'Login as a driver'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -132,15 +147,16 @@ const styles = StyleSheet.create({
     marginBottom   : Spacing.xl,
   },
   errorBanner: {
-    backgroundColor: Colors.errorTint,
-    borderRadius   : BorderRadius.sm,
-    padding        : Spacing.md,
-    marginBottom   : Spacing.md,
+    backgroundColor: Colors.error + '1A',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
   },
-  errorText  : { ...Typography.caption, color: Colors.error },
-  forgotLink : { alignSelf: 'flex-end', marginBottom: Spacing.lg, marginTop: -Spacing.xs },
-  forgotText : { ...Typography.caption, color: Colors.primary, fontWeight: '500' },
-  registerRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: Spacing.xxl },
-  registerText: { ...Typography.caption, color: Colors.textSecondary },
-  registerLink: { ...Typography.caption, color: Colors.primary, fontWeight: '700' },
+  errorText: { color: Colors.error, ...Typography.caption, textAlign: 'center' },
+  forgotLink: { alignSelf: 'flex-end', marginBottom: Spacing.xl, marginTop: Spacing.xs },
+  forgotText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
+  registerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  driverRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.md },
+  registerText: { ...Typography.body, color: Colors.textSecondary },
+  registerLink: { ...Typography.body, color: Colors.primary, fontWeight: '600' },
 });

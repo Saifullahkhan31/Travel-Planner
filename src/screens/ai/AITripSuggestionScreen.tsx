@@ -1,10 +1,11 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, ActivityIndicator, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import FadingAIText from '../../components/common/FadingAIText';
 import { AIStackParamList } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -12,6 +13,8 @@ import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
+import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import { Bus, Route } from '../../types';
 import ComfortScoreRing from '../../components/cards/ComfortScoreRing';
 import CrowdPill from '../../components/cards/CrowdPill';
@@ -37,15 +40,46 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
   const [bus, setBus] = React.useState<Bus | null>(null);
   const [busRoute, setRoute] = React.useState<Route | null>(null);
   const [aiText, setAiText] = React.useState<string | null>(null);
-  const [aiTextLoading, setAiTextLoading] = React.useState(true);
+  const [aiTextLoading, setAiTextLoading] = useState(false);
 
+  const { user, updateUser } = useAuth();
   // Alternatives: other suggestions on different routes
-  const alternatives = aiService.getTripSuggestions('u1').filter(sg => sg.routeId !== s.routeId).slice(0, 2);
-
-  // Animations
+  const alternatives = aiService.getTripSuggestions(user).filter(sg => sg.routeId !== s.routeId).slice(0, 2);
   const slideAnim  = useRef(new Animated.Value(30)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const confAnim   = useRef(new Animated.Value(0)).current;
+
+  const [isFav, setIsFav] = React.useState(false);
+  const [togglingFav, setTogglingFav] = React.useState(false);
+
+  useEffect(() => {
+    if (user && s.routeName) {
+      setIsFav(user.frequentRoutes?.includes(s.routeName) ?? false);
+    }
+  }, [user?.frequentRoutes, s.routeName]);
+
+  const toggleFav = async () => {
+    if (!user || togglingFav) return;
+    setTogglingFav(true);
+    try {
+      const routes = user.frequentRoutes || [];
+      const isCurrentlyFav = routes.includes(s.routeName);
+      const newRoutes = isCurrentlyFav
+        ? routes.filter(r => r !== s.routeName)
+        : [...routes, s.routeName];
+      
+      const { data, error } = await authService.updateProfile(user.id, { frequentRoutes: newRoutes });
+      if (error) throw new Error(error);
+      if (data) {
+        updateUser(data);
+        setIsFav(!isCurrentlyFav);
+      }
+    } catch (e: any) {
+      // Silently fail or add an alert if preferred
+    } finally {
+      setTogglingFav(false);
+    }
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -56,6 +90,7 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
 
     // Fetch live bus and route details
     (async () => {
+      setAiTextLoading(true);
       try {
         let fetchedBus = null;
         if (s.suggestedBusId) {
@@ -98,7 +133,10 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
   });
 
   const handleBook = () => {
-    if (!bus || !busRoute) return;
+    if (!bus || !busRoute) {
+      Alert.alert("Bus Unavailable", "This route suggestion is not currently active for booking.");
+      return;
+    }
     (navigation as any).navigate('SeatSelection', {
       busId       : bus.id,
       routeId     : busRoute.id,
@@ -120,7 +158,19 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
             <Text style={styles.sparkBadgeText}>Powered by AI</Text>
           </View>
         </View>
-        <View style={{ width: 38 }} />
+        <View style={{ width: 38, alignItems: 'center', justifyContent: 'center' }}>
+          {togglingFav ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <TouchableOpacity onPress={toggleFav}>
+              <Ionicons 
+                name={isFav ? "heart" : "heart-outline"} 
+                size={24} 
+                color={isFav ? Colors.error : Colors.textPrimary} 
+              />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -220,9 +270,11 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
             <Text style={styles.aiInsightTitle}>SmartBusPlanner AI</Text>
             {aiTextLoading && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 8 }} />}
           </View>
-          <Text style={styles.aiInsightText}>
-            {aiTextLoading ? 'Generating personalized insight…' : aiText}
-          </Text>
+          {aiTextLoading ? (
+            <FadingAIText style={styles.aiInsightText} />
+          ) : (
+            <Text style={styles.aiInsightText}>{aiText}</Text>
+          )}
         </View>
 
         {/* Alternative Buses */}

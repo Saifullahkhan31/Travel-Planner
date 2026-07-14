@@ -10,7 +10,6 @@ const ROUTE_BATCH_SIZE = 10;
 
 export default function RouteManagementScreen() {
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [stops, setStops] = useState<Record<string, Stop[]>>({});
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreRoutes, setHasMoreRoutes] = useState(false);
@@ -37,24 +36,11 @@ export default function RouteManagementScreen() {
     createdAt: route.created_at ?? new Date().toISOString(),
   });
 
-  const loadStopsForRoutes = async (routeIds: string[]) => {
-    if (routeIds.length === 0) return;
-
-    const { data: stopsData, error: stopsErr } = await supabase
-      .from('stops')
-      .select('*')
-      .in('route_id', routeIds)
-      .order('order', { ascending: true });
-
-    if (stopsErr) return;
-
-    const groupedStops = (stopsData || []).reduce<Record<string, Stop[]>>((acc, stop) => {
-      if (!acc[stop.route_id]) acc[stop.route_id] = [];
-      acc[stop.route_id].push(stop);
-      return acc;
-    }, {});
-
-    setStops(prev => ({ ...prev, ...groupedStops }));
+  const formatTime = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    if (h > 0) return `${h} hrs ${m} mins`;
+    return `${m} mins`;
   };
 
   const loadRoutes = async (offset = 0) => {
@@ -62,7 +48,6 @@ export default function RouteManagementScreen() {
       if (offset === 0) {
         setLoading(true);
         setRoutes([]);
-        setStops({});
       } else {
         setLoadingMore(true);
       }
@@ -76,7 +61,6 @@ export default function RouteManagementScreen() {
       const mappedRoutes = (data || []).map(mapRoute);
       setRoutes(prev => offset === 0 ? mappedRoutes : [...prev, ...mappedRoutes]);
       setHasMoreRoutes(mappedRoutes.length === ROUTE_BATCH_SIZE);
-      await loadStopsForRoutes(mappedRoutes.map(route => route.id));
 
       setError(null);
     } catch (err: any) {
@@ -174,7 +158,7 @@ export default function RouteManagementScreen() {
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900">{route.routeName}</h3>
                   <p className="text-sm text-gray-600 mt-1">
-                    {route.distance}km • {route.estimatedDuration}min • Rs. {route.baseFare}
+                    {Number(route.distance).toFixed(1)} km • {formatTime(Number(route.estimatedDuration))} • Rs. {route.baseFare}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -214,22 +198,21 @@ export default function RouteManagementScreen() {
 
               {expandedRoute === route.id && (
                 <div className="border-t bg-gray-50 p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3">Stops ({stops[route.id]?.length || 0})</h4>
-                  {stops[route.id] && stops[route.id].length > 0 ? (
-                    <div className="space-y-2">
-                      {stops[route.id].map((stop, idx) => (
-                        <div key={stop.id} className="bg-white p-3 rounded border border-gray-200 text-sm flex items-center justify-between">
-                          <div className="flex-1">
-                            <span className="font-semibold text-gray-900">#{idx + 1}</span>
-                            <span className="text-gray-600 ml-2">{stop.name}</span>
-                            <span className="text-gray-500 text-xs ml-2">({stop.latitude}, {stop.longitude})</span>
-                          </div>
-                        </div>
-                      ))}
+                  <h4 className="font-semibold text-gray-900 mb-2">Route Information</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
+                    <div>
+                      <span className="font-medium">Origin:</span> {route.origin}
                     </div>
-                  ) : (
-                    <p className="text-gray-600 text-sm">No stops added yet.</p>
-                  )}
+                    <div>
+                      <span className="font-medium">Destination:</span> {route.destination}
+                    </div>
+                    <div>
+                      <span className="font-medium">Distance:</span> {Number(route.distance).toFixed(1)} km
+                    </div>
+                    <div>
+                      <span className="font-medium">Duration:</span> {formatTime(Number(route.estimatedDuration))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

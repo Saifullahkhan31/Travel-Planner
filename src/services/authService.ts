@@ -17,13 +17,14 @@ function mapProfileToUser(authUser: any, profile: any): User {
     area            : profile?.area || '',
     occupation      : (profile?.occupation || 'student') as OccupationType,
     role            : (profile?.role       || 'commuter') as UserRole,
-    notifTrips      : profile?.notif_trips              ?? true,
-    notifCrowd      : profile?.notif_crowd              ?? true,
-    notifBookings   : profile?.notif_bookings           ?? true,
-    preferredDepartureTime: profile?.preferred_departure_time ?? 'morning',
-    travelPriority  : profile?.travel_priority          ?? 'comfort',
-    budgetRange     : profile?.budget_range             ?? 'medium',
-    createdAt       : authUser.created_at,
+    notifTrips             : profile?.notif_trips    ?? true,
+    notifCrowd             : profile?.notif_crowd   ?? true,
+    notifBookings          : profile?.notif_bookings ?? true,
+    seatLocationPreference : profile?.seat_location_preference ?? 'no_preference',
+    preferredDepartureTime : profile?.preferred_departure_time ?? 'morning',
+    travelPriority         : profile?.travel_priority          ?? 'comfort',
+    budgetRange            : profile?.budget_range             ?? 'medium',
+    createdAt              : profile?.created_at || new Date().toISOString(),
   };
 }
 
@@ -33,7 +34,10 @@ async function upsertProfile(userId: string, fields: Record<string, any>) {
     { id: userId, ...fields },
     { onConflict: 'id' }
   );
-  if (error) console.warn('[authService] upsertProfile error:', error.message);
+  if (error) {
+    console.error('[authService] upsertProfile error:', error.message);
+    throw new Error(error.message);
+  }
 }
 
 export const authService = {
@@ -146,6 +150,7 @@ export const authService = {
         notif_trips              : updates.notifTrips,
         notif_crowd              : updates.notifCrowd,
         notif_bookings           : updates.notifBookings,
+        seat_location_preference : updates.seatLocationPreference,
         preferred_departure_time : updates.preferredDepartureTime,
         travel_priority          : updates.travelPriority,
         budget_range             : updates.budgetRange,

@@ -105,8 +105,8 @@ export default function ProfileScreen({ navigation }: Props) {
     },
     {
       id      : 'preferences',
-      icon    : 'options-outline',
-      label   : 'Preferences',
+      icon    : user?.role === 'driver' ? 'notifications-outline' : 'options-outline',
+      label   : user?.role === 'driver' ? 'Notifications' : 'Preferences',
       onPress : () => navigation.navigate('Preferences'),
     },
     {
@@ -161,22 +161,24 @@ export default function ProfileScreen({ navigation }: Props) {
         </View>
 
         {/* ── Stats Row ── */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.frequentRoutes?.length ?? 0}</Text>
-            <Text style={styles.statLabel}>Saved Routes</Text>
+        {user?.role !== 'driver' && (
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{user?.frequentRoutes?.length ?? 0}</Text>
+              <Text style={styles.statLabel}>Saved Routes</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{user?.area ?? '—'}</Text>
+              <Text style={styles.statLabel}>Area</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{user?.busTypePreference ?? '—'}</Text>
+              <Text style={styles.statLabel}>Preferred Bus</Text>
+            </View>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.area ?? '—'}</Text>
-            <Text style={styles.statLabel}>Area</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.busTypePreference ?? '—'}</Text>
-            <Text style={styles.statLabel}>Preferred Bus</Text>
-          </View>
-        </View>
+        )}
 
         {/* ── Account Section ── */}
         <Text style={styles.sectionLabel}>ACCOUNT</Text>

@@ -122,7 +122,7 @@ export default function BusManagementScreen() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 border-b">
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">ID</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Fleet ID</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Driver</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Plate</th>
@@ -134,7 +134,11 @@ export default function BusManagementScreen() {
             <tbody className="divide-y">
               {buses.map((bus) => (
                 <tr key={bus.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900 font-mono">{bus.id.slice(0, 8)}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 font-mono">
+                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded font-semibold text-xs border border-gray-200">
+                      FLT-{bus.id.slice(0, 4).toUpperCase()}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-900">{bus.busType}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{bus.driverName}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 font-mono">{bus.plateNumber}</td>

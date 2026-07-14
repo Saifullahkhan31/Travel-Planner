@@ -7,6 +7,7 @@ export interface Bus {
   totalSeats: number;
   currentOccupancy: number;
   gpsLocation: { latitude: number; longitude: number };
+  driverId?: string;
   driverName: string;
   plateNumber: string;
   isActive: boolean;
@@ -142,6 +143,7 @@ export const adminBusService = {
         current_occupancy: bus.currentOccupancy ?? 0,
         gps_lat: bus.gpsLocation?.latitude ?? 30.3753,
         gps_lng: bus.gpsLocation?.longitude ?? 69.3451,
+        driver_id: bus.driverId,
         driver_name: bus.driverName,
         plate_number: bus.plateNumber,
         is_active: bus.isActive ?? true,
@@ -192,6 +194,7 @@ export const adminBusService = {
         current_occupancy: updates.currentOccupancy,
         gps_lat: updates.gpsLocation?.latitude,
         gps_lng: updates.gpsLocation?.longitude,
+        driver_id: updates.driverId,
         driver_name: updates.driverName,
         plate_number: updates.plateNumber,
         is_active: updates.isActive,
@@ -327,6 +330,7 @@ function mapBus(raw: any): Bus {
       latitude: raw.gps_lat ?? 30.3753,
       longitude: raw.gps_lng ?? 69.3451,
     },
+    driverId: raw.driver_id,
     driverName: raw.driver_name ?? 'Unknown',
     plateNumber: raw.plate_number ?? 'N/A',
     isActive: raw.is_active ?? true,

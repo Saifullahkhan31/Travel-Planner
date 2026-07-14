@@ -16,6 +16,7 @@ import { Shadows } from '../../constants/shadows';
 import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
 import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
+import { fetchPreciseRoute } from '../../utils/mapUtils';
 
 import CrowdPill from '../../components/cards/CrowdPill';
 import ComfortScoreRing from '../../components/cards/ComfortScoreRing';
@@ -34,6 +35,7 @@ function crowdColour(level: 'low' | 'medium' | 'high'): string {
 // ─── Route colours (one per route) ───────────────────────────────────────────
 const ROUTE_COLOURS = ['#3B82F6', '#8B5CF6', '#F97316', '#10B981', '#EF4444'];
 
+
 export default function MapScreen({ navigation }: Props) {
   const mapRef = useRef<MapView>(null);
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -45,6 +47,10 @@ export default function MapScreen({ navigation }: Props) {
   const [showRouteModal, setShowRouteModal] = useState(false);
   const [routeSearch, setRouteSearch] = useState('');
 
+  // Cache for precise routes to avoid redundant OSRM calls
+  const [preciseRoutes, setPreciseRoutes] = useState<Record<string, {latitude: number, longitude: number}[]>>({});
+  const fetchedRoutes = useRef<Set<string>>(new Set());
+
   const insets = useSafeAreaInsets();
 
   // ── Fetch live data from Supabase ─────────────────────────────────────────
@@ -52,8 +58,21 @@ export default function MapScreen({ navigation }: Props) {
     (async () => {
       const { data: busData } = await busService.getAllActiveBuses();
       const { data: routeData } = await busService.getAllRoutes();
-      if (busData) setBuses(busData);
+
       if (routeData) setRoutes(routeData);
+
+      if (busData && routeData) {
+        // Only show buses that have a valid route and non-zero GPS coordinates
+        const validBuses = busData.filter(b =>
+          routeData.some(r => r.id === b.routeId) &&
+          b.gpsLocation?.latitude &&
+          b.gpsLocation?.longitude &&
+          !(b.gpsLocation.latitude === 30.3753 && b.gpsLocation.longitude === 69.3451) // exclude Pakistan-center fallback
+        );
+        setBuses(validBuses);
+      } else if (busData) {
+        setBuses(busData);
+      }
     })();
   }, []);
 
@@ -99,6 +118,24 @@ export default function MapScreen({ navigation }: Props) {
     setSelectedBus(prev => prev === busId ? null : busId);
   }, []);
 
+  // Fetch precise routes when routes load
+  useEffect(() => {
+    routes.forEach(route => {
+      if (!fetchedRoutes.current.has(route.id) && route.stops && route.stops.length > 1) {
+        fetchedRoutes.current.add(route.id);
+        fetchPreciseRoute(route.stops).then(path => {
+          if (path && path.length > 0) {
+            // Simplify polyline to reduce memory/performance load
+            const simplified = path.filter((_, i) => i % 3 === 0);
+            setPreciseRoutes(prev => ({ ...prev, [route.id]: simplified }));
+          }
+        }).catch(() => {
+          fetchedRoutes.current.delete(route.id);
+        });
+      }
+    });
+  }, [routes]);
+
   const handleDismissSheet = () => setSelectedBus(null);
 
   const handleTrackLive = () => {
@@ -124,20 +161,7 @@ export default function MapScreen({ navigation }: Props) {
         {Platform.OS === 'android' && (
           <UrlTile urlTemplate={OSM_TILE_URL} zIndex={-1} />
         )}
-        {/* Route polylines — live from Supabase & OSRM */}
-        {routes.map((route, idx) => {
-          const isActive = selectedRoute === null || selectedRoute === route.id;
-          if (!isActive || !route.routePath) return null;
-          return (
-            <Polyline
-              key={`poly-${route.id}`}
-              coordinates={route.routePath}
-              strokeColor={ROUTE_COLOURS[idx % ROUTE_COLOURS.length]}
-              strokeWidth={selectedRoute === route.id ? 4 : 2}
-              zIndex={selectedRoute === route.id ? 10 : 1}
-            />
-          );
-        })}
+        {/* Route polylines hidden — TODO: re-enable once admin panel supports GPS stop entry */}
 
         {/* Bus markers — null guard for missing GPS */}
         {visibleBuses

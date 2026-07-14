@@ -39,7 +39,7 @@ export default function TravelHistoryScreen({ navigation }: Props) {
     // Fetch ALL bookings — we'll show completed + cancelled as "history"
     const { data } = await bookingService.getUserBookings(user.id);
     const past = (data ?? [])
-      .filter(b => ['completed', 'cancelled'].includes(b.bookingStatus))
+      .filter(b => ['completed', 'cancelled', 'boarded'].includes(b.bookingStatus))
       .sort((a, b) => new Date(b.travelDate).getTime() - new Date(a.travelDate).getTime());
     setHistory(past);
     setLoading(false);
@@ -51,7 +51,7 @@ export default function TravelHistoryScreen({ navigation }: Props) {
   // Summary stats
   const totalTrips = history.length;
   const totalSpent = history
-    .filter(t => t.bookingStatus === 'completed')
+    .filter(t => t.bookingStatus === 'completed' || t.bookingStatus === 'boarded')
     .reduce((sum, t) => sum + t.fareAmount, 0);
 
   // Most used route
@@ -67,8 +67,19 @@ export default function TravelHistoryScreen({ navigation }: Props) {
     if (c.count > maxCount) { maxCount = c.count; mostUsedRoute = c.name; }
   });
 
+  let displayRoute = mostUsedRoute;
+  if (mostUsedRoute !== 'None yet') {
+    const separator = mostUsedRoute.includes('→') ? '→' : mostUsedRoute.includes('-') ? '-' : null;
+    if (separator) {
+      displayRoute = mostUsedRoute
+        .split(separator)
+        .map(city => city.trim().substring(0, 3).toUpperCase())
+        .join(` ${separator} `);
+    }
+  }
+
   const renderItem = ({ item }: { item: DisplayTrip }) => {
-    const isCompleted = item.bookingStatus === 'completed';
+    const isCompleted = item.bookingStatus === 'completed' || item.bookingStatus === 'boarded';
     return (
       <TouchableOpacity
         style={styles.tripCard}
@@ -85,7 +96,7 @@ export default function TravelHistoryScreen({ navigation }: Props) {
         </View>
         <View style={[styles.statusBadge, isCompleted ? styles.statusCompleted : styles.statusOther]}>
           <Text style={[styles.statusText, { color: isCompleted ? Colors.success : Colors.textMuted }]}>
-            {item.bookingStatus.toUpperCase()}
+            {item.bookingStatus === 'boarded' ? 'COMPLETED' : item.bookingStatus.toUpperCase()}
           </Text>
         </View>
       </TouchableOpacity>
@@ -110,7 +121,7 @@ export default function TravelHistoryScreen({ navigation }: Props) {
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryValue} numberOfLines={1}>
-            {mostUsedRoute.length > 10 ? mostUsedRoute.slice(0, 10) + '…' : mostUsedRoute}
+            {displayRoute.length > 10 ? displayRoute.slice(0, 10) + '…' : displayRoute}
           </Text>
           <Text style={styles.summaryLabel}>Most Used</Text>
         </View>

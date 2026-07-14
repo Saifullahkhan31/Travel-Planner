@@ -106,11 +106,13 @@ export default function PreferencesScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="Preferences" onBack={() => navigation.goBack()} />
+      <ScreenHeader title={user?.role === 'driver' ? 'Notifications' : 'Preferences'} onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        {/* ── AI Context Banner ── */}
+        {user?.role !== 'driver' && (
+          <>
+            {/* ── AI Context Banner ── */}
         <View style={styles.aiBanner}>
           <Ionicons name="sparkles" size={18} color={Colors.primary} />
           <Text style={styles.aiBannerText}>
@@ -209,6 +211,8 @@ export default function PreferencesScreen({ navigation }: Props) {
               />
             ))}
           </View>
+        )}
+          </>
         )}
 
         {/* ── Notifications ── */}

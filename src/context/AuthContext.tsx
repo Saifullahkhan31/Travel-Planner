@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import { User } from '../types';
 import { authService } from '../services/authService';
 import { supabase } from '../lib/supabase';
@@ -10,6 +10,7 @@ interface AuthContextType {
   signUp   : (email: string, password: string, data: Partial<User>) => Promise<{ user: User | null; error: string | null }>;
   signOut  : () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
+  setResettingPassword: (isResetting: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const isResettingPassword = useRef(false);
 
   // Build a minimal User from a Supabase auth session (no profile row needed)
   function sessionUser(authUser: any): User {
@@ -52,6 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // source of truth so we never need a separate getSession() call.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Block all automated session updates while a manual password reset is taking place
+        if (isResettingPassword.current) return;
+
         if (event === 'SIGNED_OUT' || !session) {
           setUser(null);
           setLoading(false);
@@ -115,8 +120,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data) setUser(data);
   };
 
+  const setResettingPassword = (isResetting: boolean) => {
+    isResettingPassword.current = isResetting;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateUser, setResettingPassword }}>
       {children}
     </AuthContext.Provider>
   );

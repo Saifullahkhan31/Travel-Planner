@@ -13,6 +13,7 @@ import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
+import { useAuth } from '../../context/AuthContext';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import Button       from '../../components/common/Button';
 
@@ -20,6 +21,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SeatSelection'>;
 type ZoneFilter = 'no_preference' | 'female_only' | 'male_only';
 
 export default function SeatSelectionScreen({ navigation, route }: Props) {
+  const { user } = useAuth();
   const { busId, routeId, travelDate } = route.params;
   const [seats,    setSeats]    = useState<Seat[]>([]);
   const [selected, setSelected] = useState<Seat | null>(null);
@@ -55,18 +57,49 @@ export default function SeatSelectionScreen({ navigation, route }: Props) {
     }, [busId, routeId, travelDate])
   );
 
-  // Determine top-recommended seats
-  const recommended = seats
+  // Grid: 4 columns (seats go row by row)
+  const maxRow = Math.max(...seats.map(s => s.row), 0);
+
+  const userSeatPref = user?.seatPreference || 'no_preference';
+  const userSeatLocationPref = user?.seatLocationPreference || 'no_preference';
+  const userGenderPref = user?.genderPreference || 'no_preference';
+
+  // Determine top-recommended seats based on AI preferences
+  const recommended = [...seats]
     .filter(s => s.availabilityStatus)
+    .sort((a, b) => {
+      let scoreA = 0;
+      let scoreB = 0;
+
+      // Position match (Window/Aisle)
+      if (userSeatPref !== 'no_preference') {
+        if (a.position === userSeatPref) scoreA += 2;
+        if (b.position === userSeatPref) scoreB += 2;
+      }
+
+      // Location match (Front/Back)
+      if (userSeatLocationPref === 'front') {
+        scoreA += (maxRow - a.row) / maxRow;
+        scoreB += (maxRow - b.row) / maxRow;
+      } else if (userSeatLocationPref === 'back') {
+        scoreA += a.row / maxRow;
+        scoreB += b.row / maxRow;
+      }
+
+      // Gender section match
+      if (userGenderPref !== 'no_preference') {
+        if (a.seatGenderZone === userGenderPref) scoreA += 3;
+        if (b.seatGenderZone === userGenderPref) scoreB += 3;
+      }
+
+      return scoreB - scoreA;
+    })
     .slice(0, 2)
     .map(s => s.id);
 
   const filteredSeats = zoneFilter === 'no_preference'
     ? seats
     : seats.filter(s => s.seatGenderZone === zoneFilter || s.seatGenderZone === 'no_preference');
-
-  // Grid: 4 columns (seats go row by row)
-  const maxRow = Math.max(...seats.map(s => s.row), 0);
 
   const getSeatColor = (s: Seat) => {
     if (!s.availabilityStatus) return Colors.border;

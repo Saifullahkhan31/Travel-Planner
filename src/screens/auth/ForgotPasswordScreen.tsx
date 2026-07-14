@@ -13,6 +13,7 @@ import { Shadows } from '../../constants/shadows';
 import InputField from '../../components/common/InputField';
 import Button     from '../../components/common/Button';
 import { authService } from '../../services/authService';
+import { useAuth } from '../../context/AuthContext';
 
 type Props = { navigation: NativeStackNavigationProp<AuthStackParamList, 'ForgotPassword'> };
 
@@ -37,6 +38,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       setStep(2);
     }
   };
+  const { setResettingPassword } = useAuth();
 
   const handleReset = async () => {
     if (otp.length < 6) { setError('Enter the 6-digit OTP.'); return; }
@@ -44,18 +46,25 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
     if (newPass !== confirm) { setError('Passwords do not match.'); return; }
     
     setLoading(true); setError(null);
+    setResettingPassword(true);
     
     // 1. Verify OTP
     const { error: otpError } = await authService.verifyResetOTP(email, otp);
     if (otpError) {
       setError('Invalid code. Please try again.');
       setLoading(false);
+      setResettingPassword(false);
       return;
     }
 
     // 2. Update Password (user is logged in automatically after verifyOtp)
     const { error: passError } = await authService.updatePassword(newPass);
+    
+    // We instantly sign out so they can log in with their new credentials
+    await authService.signOut();
+    
     setLoading(false);
+    setResettingPassword(false);
     
     if (passError) {
       setError(passError);

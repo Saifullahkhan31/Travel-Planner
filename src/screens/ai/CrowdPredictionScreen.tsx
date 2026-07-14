@@ -13,6 +13,7 @@ import { Shadows } from '../../constants/shadows';
 import { aiService } from '../../services/aiService';
 import { busService } from '../../services/busService';
 import { MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
+import FadingAIText from '../../components/common/FadingAIText';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import CrowdPill from '../../components/cards/CrowdPill';
 
@@ -51,7 +52,7 @@ export default function CrowdPredictionScreen({ navigation, route }: Props) {
   const [loading,      setLoading]      = useState(true);
   const [isFromAPI,    setIsFromAPI]    = useState(false);
   const [aiText,       setAiText]       = useState<string | null>(null);
-  const [aiTextLoading, setAiTextLoading] = useState(true);
+  const [aiTextLoading, setAiTextLoading] = useState(false);
 
   // Sibling buses on same route for comparison
   const [siblings, setSiblings] = useState<Bus[]>([]);
@@ -217,9 +218,11 @@ export default function CrowdPredictionScreen({ navigation, route }: Props) {
             <Text style={styles.aiInsightTitle}>SmartBusPlanner AI</Text>
             {aiTextLoading && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 8 }} />}
           </View>
-          <Text style={styles.aiInsightText}>
-            {aiTextLoading ? 'Generating personalized insight…' : aiText}
-          </Text>
+          {aiTextLoading ? (
+            <FadingAIText style={styles.aiInsightText} />
+          ) : (
+            <Text style={styles.aiInsightText}>{aiText}</Text>
+          )}
         </View>
 
         {/* Hourly Chart */}

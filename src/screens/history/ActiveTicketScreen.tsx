@@ -104,7 +104,7 @@ export default function ActiveTicketScreen({ navigation, route }: Props) {
             onPress={() =>
               (navigation as any).getParent()?.navigate('MapTab', {
                 screen: 'LiveTracking',
-                params: { busId: booking.busId, bookingId },
+                params: { busId: booking.busId, bookingId, returnTo: 'TicketsTab' },
               })
             }
             style={styles.trackOverlayBtn}
@@ -152,7 +152,7 @@ export default function ActiveTicketScreen({ navigation, route }: Props) {
       <View style={styles.footer}>
         <Button
           label="View Full Ticket"
-          onPress={() => navigation.navigate('DigitalTicket', { bookingId })}
+          onPress={() => (navigation as any).navigate('DigitalTicket', { bookingId })}
           style={{ width: '100%' }}
         />
       </View>

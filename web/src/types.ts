@@ -5,6 +5,7 @@ export interface Bus {
   totalSeats: number;
   currentOccupancy: number;
   gpsLocation: { latitude: number; longitude: number };
+  driverId?: string;
   driverName: string;
   plateNumber: string;
   isActive: boolean;

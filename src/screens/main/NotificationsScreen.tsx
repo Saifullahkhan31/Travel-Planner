@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,8 +10,10 @@ import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
-import { MOCK_NOTIFICATIONS } from '../../services/mockData';
 import ScreenHeader from '../../components/common/ScreenHeader';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 type Props = { navigation: NativeStackNavigationProp<HomeStackParamList, 'Notifications'> };
 
@@ -37,14 +39,53 @@ function timeAgo(iso: string): string {
 }
 
 export default function NotificationsScreen({ navigation }: Props) {
-  const [notifs, setNotifs] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const { user } = useAuth();
+  const [notifs, setNotifs] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const markAll = () => {
+  const fetchNotifications = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    
+    if (data) {
+      setNotifs(data.map(n => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.type as NotificationType,
+        isRead: n.is_read,
+        createdAt: n.created_at
+      })));
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchNotifications();
+    }, [user])
+  );
+
+  const markAll = async () => {
+    if (!user) return;
+    
     const updated = notifs.map(n => ({ ...n, isRead: true }));
     setNotifs(updated);
-    // Mutate the global mock array so HomeScreen sees the change,
-    // but it still resets to the original state when the app restarts.
-    MOCK_NOTIFICATIONS.forEach(n => { n.isRead = true; });
+    
+    await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false);
   };
 
   const today     = notifs.filter(n => new Date(n.createdAt) > new Date(Date.now() - 86400000));
@@ -91,6 +132,9 @@ export default function NotificationsScreen({ navigation }: Props) {
         data={[]}
         renderItem={() => null}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
         ListHeaderComponent={
           <View style={styles.content}>
             {notifs.length === 0 ? (

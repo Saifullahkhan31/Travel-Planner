@@ -174,19 +174,23 @@ export default function SettingsScreen({ navigation }: Props) {
         {/* Account */}
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <View style={styles.menuCard}>
-          {accountRows.map((row, i) => renderRow(row, i === accountRows.length - 1))}
+          {(user?.role === 'driver' ? accountRows.filter(r => r.id === 'password') : accountRows).map((row, i, arr) => renderRow(row, i === arr.length - 1))}
         </View>
 
         {/* App Preferences */}
-        <Text style={styles.sectionLabel}>APP PREFERENCES</Text>
-        <View style={styles.menuCard}>
-          {appRows.map((row, i) => renderRow(row, i === appRows.length - 1))}
-        </View>
+        {user?.role !== 'driver' && (
+          <>
+            <Text style={styles.sectionLabel}>APP PREFERENCES</Text>
+            <View style={styles.menuCard}>
+              {appRows.map((row, i) => renderRow(row, i === appRows.length - 1))}
+            </View>
+          </>
+        )}
 
         {/* Data & Privacy */}
         <Text style={styles.sectionLabel}>DATA & PRIVACY</Text>
         <View style={styles.menuCard}>
-          {dataRows.map((row, i) => renderRow(row, i === dataRows.length - 1))}
+          {(user?.role === 'driver' ? dataRows.filter(r => r.id !== 'delete') : dataRows).map((row, i, arr) => renderRow(row, i === arr.length - 1))}
         </View>
 
         <View style={{ height: Spacing.xl }} />

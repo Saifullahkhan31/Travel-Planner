@@ -16,18 +16,19 @@ import { useAuth } from '../../context/AuthContext';
 type Props = { navigation: NativeStackNavigationProp<TicketsStackParamList, 'MyBookings'> };
 type Tab = 'upcoming' | 'archived' | 'cancelled';
 
-const STATUS_MAP: Record<Tab, BookingStatus[]> = {
+const STATUS_MAP: Record<Tab, string[]> = {
   upcoming: ['pending', 'confirmed'],
-  archived: ['completed'],
+  archived: ['completed', 'boarded'],
   cancelled: ['cancelled'],
 };
 
 function BookingItem({ booking, tab, navigation }: { booking: Booking; tab: Tab; navigation: Props['navigation'] }) {
-  const statusColors: Record<BookingStatus, string> = {
+  const statusColors: Record<string, string> = {
     pending  : Colors.warning,
     confirmed: Colors.success,
     cancelled: Colors.error,
     completed: Colors.textMuted,
+    boarded: Colors.primary,
   };
 
   return (
@@ -49,7 +50,7 @@ function BookingItem({ booking, tab, navigation }: { booking: Booking; tab: Tab;
         </View>
         <View style={[styles.statusBadge, { backgroundColor: statusColors[booking.bookingStatus] + '20' }]}>
           <Text style={[styles.statusText, { color: statusColors[booking.bookingStatus] }]}>
-            {booking.bookingStatus.charAt(0).toUpperCase() + booking.bookingStatus.slice(1)}
+            {booking.bookingStatus === 'boarded' ? 'COMPLETED' : booking.bookingStatus.toUpperCase()}
           </Text>
         </View>
       </View>

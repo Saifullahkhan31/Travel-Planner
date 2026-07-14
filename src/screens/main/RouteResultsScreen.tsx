@@ -10,6 +10,7 @@ import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
+import { useAuth } from '../../context/AuthContext';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import BusCard      from '../../components/cards/BusCard';
 
@@ -32,6 +33,9 @@ export default function RouteResultsScreen({ navigation, route }: Props) {
   const [results,  setResults]  = useState<BusResult[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState<Filter>('All');
+
+  const { user } = useAuth();
+  const priority = user?.travelPriority || 'comfort';
 
   useEffect(() => {
     (async () => {
@@ -56,6 +60,12 @@ export default function RouteResultsScreen({ navigation, route }: Props) {
     if (filter === 'Low Crowd') return r.crowd.crowdLevel === 'low';
     if (filter === 'Best Comfort') return r.comfort.score >= 70;
     return true;
+  }).sort((a, b) => {
+    if (priority === 'speed') return a.route.estimatedDuration - b.route.estimatedDuration;
+    if (priority === 'cost') return a.fare - b.fare;
+    if (priority === 'comfort') return b.comfort.score - a.comfort.score;
+    // For 'crowd' or anything else, try to sort by lowest occupancy
+    return a.crowd.occupancyPercentage - b.crowd.occupancyPercentage;
   });
 
   return (
@@ -84,6 +94,15 @@ export default function RouteResultsScreen({ navigation, route }: Props) {
           )}
         />
       </View>
+
+      {/* Smart Sort Banner */}
+      {!loading && filtered.length > 0 && (
+        <View style={styles.smartBanner}>
+          <Text style={styles.smartBannerText}>
+            ✨ Sorted by your priority: <Text style={{fontWeight: '700'}}>{priority.charAt(0).toUpperCase() + priority.slice(1)}</Text>
+          </Text>
+        </View>
+      )}
 
       {/* Results count */}
       {!loading && (
@@ -141,4 +160,14 @@ const styles = StyleSheet.create({
   emptyIcon     : { fontSize: 48, marginBottom: Spacing.md },
   emptyTitle    : { ...Typography.h3, marginBottom: Spacing.sm },
   emptySubtitle : { ...Typography.body, color: Colors.textSecondary, textAlign: 'center' },
+  smartBanner   : { 
+    backgroundColor: Colors.primaryTint, 
+    marginHorizontal: Spacing.screenPadding, 
+    padding: Spacing.sm, 
+    borderRadius: BorderRadius.md, 
+    marginBottom: Spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary,
+  },
+  smartBannerText: { ...Typography.caption, color: Colors.primary },
 });

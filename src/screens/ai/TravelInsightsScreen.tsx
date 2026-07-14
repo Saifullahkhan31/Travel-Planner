@@ -13,6 +13,7 @@ import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { aiService } from '../../services/aiService';
 import { bookingService } from '../../services/bookingService';
+import { busService } from '../../services/busService';
 import { useAuth } from '../../context/AuthContext';
 
 type Props = NativeStackScreenProps<AIStackParamList, 'TravelInsights'>;
@@ -55,7 +56,7 @@ export default function TravelInsightsScreen({ navigation }: Props) {
 
       const history = bookings ?? [];
       setTotalTrips(history.length);
-      setTotalSpent(history.filter(b => b.bookingStatus === 'completed').reduce((s, b) => s + b.fareAmount, 0));
+      setTotalSpent(history.filter(b => b.bookingStatus === 'completed' || b.bookingStatus === 'boarded').reduce((s, b) => s + b.fareAmount, 0));
       const routes = new Set(history.map(b => b.routeName));
       setUniqueRoutes(routes.size);
 
@@ -81,7 +82,16 @@ export default function TravelInsightsScreen({ navigation }: Props) {
           seatSelected: b.seatNumber?.toString() ?? '', completionStatus: b.bookingStatus as any,
         }));
       setRoutines(aiService.detectRoutines(tripHistory));
-      setSuggestions(aiService.getTripSuggestions(user?.id ?? ''));
+      
+      const [liveBusesRes, liveRoutesRes] = await Promise.all([
+        busService.getAllActiveBuses(),
+        busService.getAllRoutes()
+      ]);
+      setSuggestions(aiService.getTripSuggestions(
+        user,
+        liveBusesRes.data ?? [],
+        liveRoutesRes.data ?? []
+      ));
 
       // Animate crowd bars
       const anims = HOURS.map((h, i) =>

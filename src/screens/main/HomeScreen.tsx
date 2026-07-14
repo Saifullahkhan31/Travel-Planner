@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  FlatList, RefreshControl, Dimensions, Platform,
+  FlatList, RefreshControl, Dimensions, Platform, Modal
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT, UrlTile } from 'react-native-maps';
@@ -18,12 +18,13 @@ import { aiService } from '../../services/aiService';
 import { busService } from '../../services/busService';
 import { useAuth } from '../../context/AuthContext';
 import { HOME_MAP_POLYLINE_COORDS, HOME_MAP_BUS_LOCATION } from '../../services/aiMockData';
-import { MOCK_NOTIFICATIONS } from '../../services/mockData';
+import { supabase } from '../../lib/supabase';
 import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
 import CrowdPill from '../../components/cards/CrowdPill';
 import ComfortScoreRing from '../../components/cards/ComfortScoreRing';
 import AISuggestionCard from '../../components/cards/AISuggestionCard';
 import LocationPickerModal from '../../components/modals/LocationPickerModal';
+import SavedRoutesModal from '../../components/modals/SavedRoutesModal';
 
 // SCREEN : HomeScreen  ROUTE : Home
 
@@ -39,6 +40,7 @@ export default function HomeScreen({ navigation }: Props) {
   // Location State
   const [currentCity, setCurrentCityState] = useState('Pakistan');
   const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [savedRoutesModalVisible, setSavedRoutesModalVisible] = useState(false);
 
   const [routeList, setRouteList] = useState<any[]>([]);
 
@@ -74,15 +76,27 @@ export default function HomeScreen({ navigation }: Props) {
         });
 
     // AI suggestions now reliably use live IDs from the targeted city pool
-    const targetedSuggestions = aiService.getTripSuggestions(user?.id ?? '', relevantBuses, rList);
+    const targetedSuggestions = aiService.getTripSuggestions(user, relevantBuses, rList);
     setSuggestions(targetedSuggestions);
 
   }, [user, currentCity]);
 
   useFocusEffect(
     useCallback(() => {
-      setUnreadCount(MOCK_NOTIFICATIONS.filter(n => !n.isRead).length);
-    }, [])
+      const fetchUnreadCount = async () => {
+        if (!user) return;
+        const { count } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+        
+        if (count !== null) {
+          setUnreadCount(count);
+        }
+      };
+      fetchUnreadCount();
+    }, [user])
   );
 
   useEffect(() => { load(); }, [load]);
@@ -113,6 +127,9 @@ export default function HomeScreen({ navigation }: Props) {
 
     // ── Intelligent Filtering ──
     const validRoutes = routeList.filter(r => liveBuses.some(b => b.routeId === r.id && b.isActive));
+    // User's frequent routes
+    const userFavs = validRoutes.filter(r => user?.frequentRoutes?.includes(r.routeName));
+
     let quickRoutes = currentCity === 'Pakistan' 
       ? validRoutes 
       : validRoutes.filter(r => r.origin?.toLowerCase() === currentCity.toLowerCase());
@@ -124,6 +141,9 @@ export default function HomeScreen({ navigation }: Props) {
       );
       quickRoutes = [...quickRoutes, ...arrivingRoutes];
     }
+
+    // Remove userFavs from quickRoutes to avoid duplication if we have a separate favorites button
+    quickRoutes = quickRoutes.filter(r => !userFavs.some(fav => fav.id === r.id));
     const displayRoutes = quickRoutes.slice(0, 4);
 
     const displayBuses = liveBuses
@@ -191,6 +211,16 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* ── Quick Route Chips ── */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+          {userFavs.length > 0 && (
+            <TouchableOpacity
+              style={[styles.routeChip, { borderColor: Colors.error, borderWidth: 1 }]}
+              onPress={() => setSavedRoutesModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="heart" size={12} color={Colors.error} style={{ marginRight: 4 }} />
+              <Text style={styles.routeChipText}>Saved Routes ({userFavs.length})</Text>
+            </TouchableOpacity>
+          )}
           {displayRoutes.map((r, idx) => (
             <TouchableOpacity
               key={`${r.id}-${idx}`}
@@ -329,6 +359,19 @@ export default function HomeScreen({ navigation }: Props) {
           onSelectCity={setCurrentCity}
           currentCity={currentCity}
         />
+
+        <SavedRoutesModal
+          visible={savedRoutesModalVisible}
+          onClose={() => setSavedRoutesModalVisible(false)}
+          savedRoutes={userFavs}
+          onSelectRoute={(r) => {
+            navigation.navigate('RouteResults', {
+              origin: r.origin,
+              destination: r.destination,
+              date: new Date().toISOString().split('T')[0],
+            });
+          }}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -380,7 +423,7 @@ const styles = StyleSheet.create({
   chipsScroll: { marginBottom: Spacing.lg },
   routeChip  : {
     backgroundColor: Colors.card, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm, marginRight: Spacing.sm, ...Shadows.card,
+    paddingVertical: Spacing.sm, marginRight: Spacing.sm, flexDirection: 'row', alignItems: 'center', ...Shadows.card,
   },
   routeChipText: { ...Typography.caption, color: Colors.textSecondary, maxWidth: 150 },
 

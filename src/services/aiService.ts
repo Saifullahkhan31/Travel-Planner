@@ -5,7 +5,7 @@ import { FARE_CONSTANTS, COMFORT_WEIGHTS, CROWD_THRESHOLDS } from '../constants/
 // --- FastAPI AI Service URL ---
 // Change this to your deployed Railway/Render URL in production.
 // For local development, run `uvicorn main:app --port 8000` inside the ai-service folder.
-const AI_SERVICE_URL = 'http://192.168.1.40:8000'; // Android emulator → localhost. Use your IP for physical device.
+const AI_SERVICE_URL = 'http://172.17.44.44:8000'; // Android emulator → localhost. Use your IP for physical device.
 
 function getCrowdLevel(pct: number): 'low' | 'medium' | 'high' {
   if (pct <= CROWD_THRESHOLDS.LOW_MAX) return 'low';
@@ -64,21 +64,42 @@ export const aiService = {
    * If live buses/routes are passed in (from HomeScreen's Supabase fetch), we use them.
    * Otherwise, we fall back to the AI_MOCK_ROUTES for the route names only.
    */
-  getTripSuggestions(userId: string, liveBuses?: Bus[], liveRoutes?: Route[]): AITripSuggestion[] {
+  getTripSuggestions(user: any | null, liveBuses?: Bus[], liveRoutes?: Route[]): AITripSuggestion[] {
     const now = new Date();
+
+    // Time adjustment based on preference
+    let timeOffsetHours = 0;
+    if (user?.preferredDepartureTime === 'early_morning') timeOffsetHours = -3;
+    if (user?.preferredDepartureTime === 'afternoon') timeOffsetHours = 4;
+    if (user?.preferredDepartureTime === 'evening') timeOffsetHours = 8;
+    if (user?.preferredDepartureTime === 'night') timeOffsetHours = 12;
 
     // If we have live database buses, use those
     if (liveBuses && liveBuses.length > 0 && liveRoutes && liveRoutes.length > 0) {
-      return liveBuses
+      // Sort buses to prioritize ones on the user's frequent routes
+      const sortedBuses = [...liveBuses].sort((a, b) => {
+        const routeA = liveRoutes.find(r => r.id === a.routeId)?.routeName;
+        const routeB = liveRoutes.find(r => r.id === b.routeId)?.routeName;
+        const aFav = routeA && user?.frequentRoutes?.includes(routeA) ? 1 : 0;
+        const bFav = routeB && user?.frequentRoutes?.includes(routeB) ? 1 : 0;
+        return bFav - aFav;
+      });
+
+      return sortedBuses
         .slice(0, 3)
         .map((bus, idx) => {
           const route = liveRoutes.find(r => r.id === bus.routeId) ?? liveRoutes[idx % liveRoutes.length];
           // Skip if we still can't find a route with a valid name
           if (!route?.routeName) return null;
+
+          const isRoutine = user?.frequentRoutes?.includes(route.routeName) ?? (idx === 0);
           const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
           const comfort = aiService.getComfortScore(bus.id, bus.currentOccupancy, bus.totalSeats, bus.busType);
           const fare = aiService.estimateFare(route.id, bus.busType, route.distance || 200);
-          const departure = new Date(now.getTime() + (15 + idx * 12) * 60 * 1000);
+
+          // Adjust departure time based on user preference
+          const departure = new Date(now.getTime() + (15 + idx * 12 + (timeOffsetHours * 60)) * 60 * 1000);
+
           return {
             routeId: route.id,
             routeName: route.routeName,
@@ -86,10 +107,10 @@ export const aiService = {
             departureTime: departure.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }),
             comfortScore: comfort,
             crowdPrediction: crowd,
-            isRoutine: idx === 0,
-            confidenceScore: 0.88 - idx * 0.08,
+            isRoutine,
+            confidenceScore: isRoutine ? (0.95 - idx * 0.02) : (0.85 - idx * 0.08),
             estimatedFare: fare.totalFare,
-            eta: 15 + idx * 12,
+            eta: 15 + idx * 12 + (timeOffsetHours > 0 ? timeOffsetHours * 60 : 0),
           };
         })
         .filter((s): s is NonNullable<typeof s> => s !== null);

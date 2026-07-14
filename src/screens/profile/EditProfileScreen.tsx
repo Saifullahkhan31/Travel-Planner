@@ -219,23 +219,27 @@ export default function EditProfileScreen({ navigation }: Props) {
         </View>
 
         {/* ── Occupation ── */}
-        <Text style={styles.sectionTitle}>Occupation</Text>
-        <View style={styles.pillContainer}>
-          {OCCUPATIONS.map(occ => {
-            const isActive = occupation === occ.value;
-            return (
-              <TouchableOpacity
-                key={occ.value}
-                style={[styles.pill, isActive && styles.pillActive]}
-                onPress={() => setOccupation(occ.value)}
-                activeOpacity={0.7}
-              >
-                <Text style={{ fontSize: 14 }}>{occ.icon}</Text>
-                <Text style={[styles.pillText, isActive && styles.pillTextActive]}>{occ.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {user?.role !== 'driver' && (
+          <>
+            <Text style={styles.sectionTitle}>Occupation</Text>
+            <View style={styles.pillContainer}>
+              {OCCUPATIONS.map(occ => {
+                const isActive = occupation === occ.value;
+                return (
+                  <TouchableOpacity
+                    key={occ.value}
+                    style={[styles.pill, isActive && styles.pillActive]}
+                    onPress={() => setOccupation(occ.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 14 }}>{occ.icon}</Text>
+                    <Text style={[styles.pillText, isActive && styles.pillTextActive]}>{occ.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>

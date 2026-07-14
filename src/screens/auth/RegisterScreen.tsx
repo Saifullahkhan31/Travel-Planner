@@ -72,7 +72,7 @@ export default function RegisterScreen({ navigation }: Props) {
         name: name.trim(), phone, genderPreference: genderPref, gender: genderPref === 'female_only' ? 'female' : 'male',
       });
       if (apiErr) { setError(apiErr); return; }
-      if (user) navigation.navigate('ProfileSetup', { userId: user.id });
+      // AppNavigator will automatically mount RootStack since the session is now active
     } catch {
       setError('Something went wrong. Please try again.');
     } finally { setLoading(false); }

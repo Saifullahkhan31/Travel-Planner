@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Animated, Platform,
+  View, Text, StyleSheet, TouchableOpacity, Animated, Platform, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
@@ -8,14 +8,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 
-import { MapStackParamList } from '../../types';
+import { MapStackParamList, Bus, Route as BusRoute } from '../../types';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
 import { aiService } from '../../services/aiService';
+import { busService } from '../../services/busService';
 import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
+import { fetchPreciseRoute, getCoordAlongPath, calculatePathDistances } from '../../utils/mapUtils';
 import CrowdPill from '../../components/cards/CrowdPill';
 
 // SCREEN : LiveTrackingScreen  ROUTE : LiveTracking
@@ -25,38 +27,76 @@ type Props = {
   route     : RouteProp<MapStackParamList, 'LiveTracking'>;
 };
 
-// ─── Interpolate between two coordinates ─────────────────────────────────────
-function lerpCoord(
-  from: { latitude: number; longitude: number },
-  to  : { latitude: number; longitude: number },
-  t   : number,
-) {
-  return {
-    latitude : from.latitude  + (to.latitude  - from.latitude)  * t,
-    longitude: from.longitude + (to.longitude - from.longitude) * t,
-  };
-}
+// Start map far back to show entire country
+const PAKISTAN_REGION = {
+  latitude: 30.3753,
+  longitude: 69.3451,
+  latitudeDelta: 12.0,
+  longitudeDelta: 12.0,
+};
 
 export default function LiveTrackingScreen({ navigation, route }: Props) {
   const { busId } = route.params;
   const mapRef = useRef<MapView>(null);
 
-  const bus      = MOCK_BUSES.find(b => b.id === busId) ?? MOCK_BUSES[0];
-  const busRoute = MOCK_ROUTES.find(r => r.id === bus.routeId) ?? MOCK_ROUTES[0];
+  const [loading, setLoading] = useState(true);
+  const [bus, setBus] = useState<Bus | null>(null);
+  const [busRoute, setBusRoute] = useState<BusRoute | null>(null);
 
-  const crowd   = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
-  const comfort = aiService.getComfortScore(bus.id, bus.currentOccupancy, bus.totalSeats, bus.busType);
+  // ── Simulated position ─────────────────────────────────────────────────────
+  // progressRef drives the animation loop without triggering re-renders.
+  // busCoord is the only state that moves the map marker.
+  const progressRef = useRef(0.05);
+  const [progress,  setProgress ] = useState(0.05);          // for ETA display only
+  const [busCoord,  setBusCoord ] = useState<{latitude: number, longitude: number} | null>(null);
+  const [nextStop,  setNextStop ] = useState<{latitude: number, longitude: number, name: string} | null>(null);
 
-  // ── Simulated position state ──────────────────────────────────────────────
-  const [progress,  setProgress ] = useState(0.1);          // 0–1 along the route
-  const [busCoord,  setBusCoord ] = useState(bus.gpsLocation);
-  const [nextStop,  setNextStop ] = useState(busRoute.stops[1] ?? busRoute.stops[0]);
+  // Follow Mode
+  const [isFollowing, setIsFollowing] = useState(true);
+  const isFollowingRef = useRef(true);
+
+  const [preciseRoute, setPreciseRoute] = useState<{latitude: number, longitude: number}[]>([]);
+  const preciseRouteRef = useRef<{latitude: number, longitude: number}[]>([]);
 
   // Pulsing animation for the live dot
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  // 1. Fetch real DB data or fallback to mock
   useEffect(() => {
-    // Pulse animation
+    async function loadBusData() {
+      let targetBus = MOCK_BUSES.find(b => b.id === busId);
+      let targetRoute = null;
+
+      if (!targetBus) {
+        const { data } = await busService.getBusById(busId);
+        if (data) targetBus = data;
+      }
+
+      if (targetBus) {
+        targetRoute = MOCK_ROUTES.find(r => r.id === targetBus!.routeId);
+        if (!targetRoute) {
+          const { data } = await busService.getRouteById(targetBus.routeId);
+          if (data) targetRoute = data;
+        }
+      }
+
+      const finalBus = targetBus ?? MOCK_BUSES[0];
+      const finalRoute = targetRoute ?? MOCK_ROUTES[0];
+
+      setBus(finalBus);
+      setBusRoute(finalRoute);
+      setBusCoord(finalBus.gpsLocation);
+      setNextStop(finalRoute.stops[1] ?? finalRoute.stops[0]);
+      setLoading(false);
+    }
+    loadBusData();
+  }, [busId]);
+
+  // 2. Run simulation once data is loaded
+  useEffect(() => {
+    if (loading || !bus || !busRoute) return;
+
+    // Pulse animation for the "LIVE" badge
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.5, duration: 700, useNativeDriver: true }),
@@ -65,42 +105,80 @@ export default function LiveTrackingScreen({ navigation, route }: Props) {
     );
     pulse.start();
 
-    // Simulated movement — nudge bus position every 3 seconds
-    const stops = busRoute.stops;
-    let currentSegment = 0;
-    let segProgress    = 0.1;
+    let coordInterval: NodeJS.Timeout;
+    let displayInterval: NodeJS.Timeout;
+    let cameraInterval: NodeJS.Timeout;
 
-    const moveInterval = setInterval(() => {
-      segProgress += 0.05;
-      if (segProgress >= 1) {
-        segProgress = 0;
-        currentSegment = Math.min(currentSegment + 1, stops.length - 2);
+    const startSimulation = async () => {
+      // 1. Fetch precise route if not already cached
+      let pathPoints = preciseRouteRef.current;
+      if (pathPoints.length === 0 && busRoute.stops.length > 0) {
+        pathPoints = await fetchPreciseRoute(busRoute.stops);
+        if (pathPoints.length >= 2) {
+          setPreciseRoute(pathPoints);
+          preciseRouteRef.current = pathPoints;
+        }
       }
 
-      const from = stops[currentSegment];
-      const to   = stops[Math.min(currentSegment + 1, stops.length - 1)];
-      const newCoord = lerpCoord(from, to, segProgress);
+      const effectivePath = pathPoints.length >= 2
+        ? pathPoints
+        : busRoute.stops.map(s => ({ latitude: s.latitude, longitude: s.longitude }));
 
-      setBusCoord(newCoord);
-      setNextStop(to);
-      setProgress((currentSegment + segProgress) / (stops.length - 1));
+      if (effectivePath.length < 2) return;
 
-      mapRef.current?.animateToRegion({
-        ...newCoord,
-        latitudeDelta : 1.5,
-        longitudeDelta: 1.5,
-      }, 2500);
-    }, 3000);
+      // Precalculate distances once
+      const { distances, totalDist } = calculatePathDistances(effectivePath);
+
+      // Fast loop: just advance progress ref and update map marker coord (one state update per tick)
+      coordInterval = setInterval(() => {
+        progressRef.current += 0.00008;
+        if (progressRef.current >= 1) progressRef.current = 0.05;
+
+        const newCoord = getCoordAlongPath(effectivePath, progressRef.current, distances, totalDist);
+        if (newCoord) setBusCoord(newCoord);
+      }, 500);
+
+      // Slow loop: update progress display and ETA every 2 seconds
+      displayInterval = setInterval(() => {
+        const p = progressRef.current;
+        setProgress(p);
+        const targetIdx = Math.min(Math.ceil(p * (busRoute.stops.length - 1)), busRoute.stops.length - 1);
+        setNextStop(busRoute.stops[targetIdx]);
+      }, 2000);
+
+      // Camera follow every 3 seconds
+      cameraInterval = setInterval(() => {
+        const newCoord = getCoordAlongPath(effectivePath, progressRef.current, distances, totalDist);
+        if (isFollowingRef.current && newCoord) {
+          mapRef.current?.animateCamera({ center: newCoord }, { duration: 2500 });
+        }
+      }, 3000);
+    };
+
+    startSimulation();
 
     return () => {
       pulse.stop();
-      clearInterval(moveInterval);
+      clearInterval(coordInterval);
+      clearInterval(displayInterval);
+      clearInterval(cameraInterval);
     };
-  }, [busId]);
+  }, [loading, bus, busRoute]);
+
+  if (loading || !bus || !busCoord || !busRoute || !nextStop) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  const crowd   = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
+  const comfort = aiService.getComfortScore(bus.id, bus.currentOccupancy, bus.totalSeats, bus.busType);
 
   // ── ETA calculation (mock) ────────────────────────────────────────────────
   const remainingPct    = 1 - progress;
-  const etaMinutes      = Math.round(busRoute.estimatedDuration * remainingPct);
+  const etaMinutes      = Math.round((busRoute.estimatedDuration || 120) * remainingPct);
   const etaDisplay      = etaMinutes > 60
     ? `${Math.floor(etaMinutes / 60)}h ${etaMinutes % 60}m`
     : `${etaMinutes} min`;
@@ -121,25 +199,39 @@ export default function LiveTrackingScreen({ navigation, route }: Props) {
         }}
         showsUserLocation={false}
         showsCompass={false}
+        onPanDrag={() => {
+          if (isFollowingRef.current) {
+            isFollowingRef.current = false;
+            setIsFollowing(false);
+          }
+        }}
+        onRegionChangeComplete={(region, details) => {
+          if (details?.isGesture && isFollowingRef.current) {
+            isFollowingRef.current = false;
+            setIsFollowing(false);
+          }
+        }}
       >
         {Platform.OS === 'android' && (
           <UrlTile urlTemplate={OSM_TILE_URL} zIndex={-1} />
         )}
-        {/* Full route polyline (faded) */}
-        <Polyline
-          coordinates={busRoute.stops.map(s => ({ latitude: s.latitude, longitude: s.longitude }))}
-          strokeColor={Colors.primary + '40'}
-          strokeWidth={4}
-        />
-        {/* Travelled portion (solid) */}
-        <Polyline
-          coordinates={busRoute.stops
-            .slice(0, Math.ceil(progress * busRoute.stops.length) + 1)
-            .map(s => ({ latitude: s.latitude, longitude: s.longitude }))
-          }
-          strokeColor={Colors.primary}
-          strokeWidth={4}
-        />
+        {/* Full route polyline — only re-renders when preciseRoute changes, not on every busCoord update */}
+        {(() => {
+          const polyCoords = preciseRoute.length >= 2
+            ? preciseRoute
+            : busRoute.stops
+                .map(s => ({ latitude: s.latitude, longitude: s.longitude }))
+                .filter(c => c.latitude !== 0 && c.longitude !== 0);
+          if (polyCoords.length < 2) return null;
+          return (
+            <Polyline
+              key={`poly-full-${busRoute.id}`}
+              coordinates={polyCoords}
+              strokeColor={Colors.primary + '60'}
+              strokeWidth={4}
+            />
+          );
+        })()}
 
         {/* Stop markers */}
         {busRoute.stops.map((stop, idx) => (
@@ -177,7 +269,13 @@ export default function LiveTrackingScreen({ navigation, route }: Props) {
           <TouchableOpacity
             style={styles.backBtn}
             activeOpacity={0.7}
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              if (route.params?.returnTo) {
+                navigation.getParent()?.navigate(route.params.returnTo);
+              } else {
+                navigation.goBack();
+              }
+            }}
           >
             <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -199,6 +297,22 @@ export default function LiveTrackingScreen({ navigation, route }: Props) {
       <View style={styles.progressBarContainer}>
         <View style={[styles.progressBarFill, { width: `${Math.round(progress * 100)}%` as any }]} />
       </View>
+
+      {/* ── Recenter Button ── */}
+      {!isFollowing && (
+        <TouchableOpacity
+          style={styles.recenterBtn}
+          activeOpacity={0.8}
+          onPress={() => {
+            isFollowingRef.current = true;
+            setIsFollowing(true);
+            mapRef.current?.animateCamera({ center: busCoord }, { duration: 1000 });
+          }}
+        >
+          <Ionicons name="navigate" size={18} color={Colors.primary} />
+          <Text style={styles.recenterText}>Re-center</Text>
+        </TouchableOpacity>
+      )}
 
       {/* ── Tracking card at bottom ── */}
       <View style={styles.card}>
@@ -334,17 +448,37 @@ const styles = StyleSheet.create({
   stopMarkerText : { fontSize: 10, fontWeight: '700', color: Colors.primary },
 
   liveBusMarker: {
-    width          : 44,
-    height         : 44,
-    backgroundColor: Colors.primary,
-    borderRadius   : BorderRadius.md,
+    width          : 32,
+    height         : 32,
+    backgroundColor: Colors.white,
+    borderRadius   : 16,
+    borderWidth    : 2,
+    borderColor    : Colors.primary,
     alignItems     : 'center',
     justifyContent : 'center',
-    ...Shadows.button,
+    ...Shadows.card,
   },
-  liveBusEmoji: { fontSize: 22 },
+  liveBusEmoji: { fontSize: 16 },
 
   // Bottom card
+  recenterBtn: {
+    position: 'absolute',
+    bottom: 220,
+    right: 20,
+    backgroundColor: Colors.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 24,
+    ...Shadows.card,
+  },
+  recenterText: {
+    marginLeft: 6,
+    color: Colors.primary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
   card: {
     position       : 'absolute',
     bottom         : 0,

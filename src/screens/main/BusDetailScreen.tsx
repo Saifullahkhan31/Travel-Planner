@@ -12,6 +12,8 @@ import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
+import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import CrowdPill from '../../components/cards/CrowdPill';
 import ComfortScoreRing from '../../components/cards/ComfortScoreRing';
@@ -27,6 +29,39 @@ export default function BusDetailScreen({ navigation, route }: Props) {
   const [comfort, setComfort] = useState<ComfortScore | null>(null);
   const [fare, setFare] = useState<FareEstimate | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const { user, updateUser } = useAuth();
+  const [isFav, setIsFav] = useState(false);
+  const [togglingFav, setTogglingFav] = useState(false);
+
+  useEffect(() => {
+    if (user && busRoute) {
+      setIsFav(user.frequentRoutes?.includes(busRoute.routeName) ?? false);
+    }
+  }, [user?.frequentRoutes, busRoute?.routeName]);
+
+  const toggleFav = async () => {
+    if (!user || !busRoute || togglingFav) return;
+    setTogglingFav(true);
+    try {
+      const routes = user.frequentRoutes || [];
+      const isCurrentlyFav = routes.includes(busRoute.routeName);
+      const newRoutes = isCurrentlyFav
+        ? routes.filter(r => r !== busRoute.routeName)
+        : [...routes, busRoute.routeName];
+      
+      const { data, error } = await authService.updateProfile(user.id, { frequentRoutes: newRoutes });
+      if (error) throw new Error(error);
+      if (data) {
+        updateUser(data);
+        setIsFav(!isCurrentlyFav);
+      }
+    } catch (e: any) {
+      // Silently fail or add an alert if preferred
+    } finally {
+      setTogglingFav(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -68,7 +103,24 @@ export default function BusDetailScreen({ navigation, route }: Props) {
       <ScreenHeader
         title="Bus Details"
         onBack={() => navigation.goBack()}
-        rightComponent={<Ionicons name="share-outline" size={20} color={Colors.textPrimary} />}
+        rightComponent={
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
+            {togglingFav ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <TouchableOpacity onPress={toggleFav}>
+                <Ionicons 
+                  name={isFav ? "heart" : "heart-outline"} 
+                  size={22} 
+                  color={isFav ? Colors.error : Colors.textPrimary} 
+                />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity>
+              <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+        }
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

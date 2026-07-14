@@ -19,18 +19,35 @@ export default function ComfortScoreRing({ score, size = 'md', showLabel = false
   const progress = ((100 - score) / 100) * circumference;
   const cx = diameter / 2;
 
+  let ringColor = Colors.primary;
+  let ringTint = Colors.primaryTint;
+
+  if (score >= 80) {
+    ringColor = Colors.success;
+    ringTint = Colors.successTint;
+  } else if (score >= 60) {
+    ringColor = Colors.primary;
+    ringTint = Colors.primaryTint;
+  } else if (score >= 40) {
+    ringColor = Colors.warning;
+    ringTint = Colors.warningTint;
+  } else {
+    ringColor = Colors.error;
+    ringTint = Colors.errorTint;
+  }
+
   return (
     <View style={styles.wrapper}>
       <Svg width={diameter} height={diameter}>
         <Circle
           cx={cx} cy={cx} r={radius}
-          stroke={Colors.comfortTint}
+          stroke={ringTint}
           strokeWidth={RING_WIDTH}
           fill="none"
         />
         <Circle
           cx={cx} cy={cx} r={radius}
-          stroke={Colors.comfort}
+          stroke={ringColor}
           strokeWidth={RING_WIDTH}
           fill="none"
           strokeDasharray={circumference}
