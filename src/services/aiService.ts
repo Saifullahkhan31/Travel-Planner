@@ -5,7 +5,7 @@ import { FARE_CONSTANTS, COMFORT_WEIGHTS, CROWD_THRESHOLDS } from '../constants/
 // --- FastAPI AI Service URL ---
 // Change this to your deployed Railway/Render URL in production.
 // For local development, run `uvicorn main:app --port 8000` inside the ai-service folder.
-const AI_SERVICE_URL = 'http://172.17.44.44:8000'; // Android emulator → localhost. Use your IP for physical device.
+const AI_SERVICE_URL = 'https://smarttravel-aiservice.onrender.com'; // Windows Mobile Hotspot Default IPhttp://192.168.137.1:8000
 
 function getCrowdLevel(pct: number): 'low' | 'medium' | 'high' {
   if (pct <= CROWD_THRESHOLDS.LOW_MAX) return 'low';

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { adminRouteService, DeleteImpact } from '../services/adminRouteService';
-import { Route, Stop } from '../types';
+import { Route } from '../types';
 import RouteFormModal from './RouteFormModal';
 import { CardListSkeleton } from '../components/LoadingSkeleton';
 import { Trash2, Edit2, Plus, ChevronDown, ChevronUp } from 'lucide-react';

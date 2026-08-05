@@ -16,10 +16,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.smartbusplanner.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "package": "com.smartbusplanner.app",
       "config": {
         "googleMaps": {

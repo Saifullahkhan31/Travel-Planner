@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase } from '../lib/supabaseClient';
 import { adminRouteService } from '../services/adminRouteService';
 import { Route } from '../types';
 import { X } from 'lucide-react';
