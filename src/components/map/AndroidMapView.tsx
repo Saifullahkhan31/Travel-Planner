@@ -142,9 +142,9 @@ const AndroidMapViewInner = forwardRef<AndroidMapRef, AndroidMapViewProps>(
     useImperativeHandle(ref, () => ({
       animateCamera(opts, opts2) {
         if (MapLibreComponents) {
-          cameraRef.current?.flyTo({
-            center: toLonLat(opts.center),
-            duration: opts2?.duration ?? 1000,
+          cameraRef.current?.setCamera({
+            centerCoordinate: toLonLat(opts.center),
+            animationDuration: opts2?.duration ?? 1000,
           });
         } else {
           rnMapRef.current?.animateCamera({ center: opts.center }, { duration: opts2?.duration ?? 1000 });
@@ -156,19 +156,26 @@ const AndroidMapViewInner = forwardRef<AndroidMapRef, AndroidMapViewProps>(
           const pad = opts?.edgePadding ?? { top: 80, right: 40, bottom: 80, left: 40 };
           const lons = coords.map(c => c.longitude);
           const lats = coords.map(c => c.latitude);
-          cameraRef.current?.fitBounds(
-            [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)],
-            { padding: { top: pad.top, right: pad.right, bottom: pad.bottom, left: pad.left }, duration: opts?.animated !== false ? 600 : 0 },
-          );
+          cameraRef.current?.setCamera({
+            bounds: {
+              ne: [Math.max(...lons), Math.max(...lats)],
+              sw: [Math.min(...lons), Math.min(...lats)],
+              paddingTop: pad.top,
+              paddingRight: pad.right,
+              paddingBottom: pad.bottom,
+              paddingLeft: pad.left,
+            },
+            animationDuration: opts?.animated !== false ? 600 : 0,
+          });
         } else {
           rnMapRef.current?.fitToCoordinates(coords, opts);
         }
       },
       animateToRegion(region, duration) {
         if (MapLibreComponents) {
-          cameraRef.current?.flyTo({
-            center: [region.longitude, region.latitude],
-            duration: duration ?? 600,
+          cameraRef.current?.setCamera({
+            centerCoordinate: [region.longitude, region.latitude],
+            animationDuration: duration ?? 600,
           });
         } else {
           rnMapRef.current?.animateToRegion(region, duration);
@@ -201,18 +208,19 @@ const AndroidMapViewInner = forwardRef<AndroidMapRef, AndroidMapViewProps>(
       return (
         <MapLibreMap
           style={[styles.map, style]}
-          styleURL={MAPLIBRE_STYLE_URL}
+          mapStyle={MAPLIBRE_STYLE_URL}
           scrollEnabled={scrollEnabled}
           zoomEnabled={zoomEnabled}
           rotateEnabled={rotateEnabled}
           pitchEnabled={pitchEnabled}
           onPress={onPress as any}
           onTouchStart={onPanDrag}
-          androidHardwareAccelerationDisabled={false}
+          androidView="texture"
         >
           <MapLibreCamera
             ref={cameraRef}
-            initialViewState={{ center: defaultCenter, zoom: defaultZoom }}
+            centerCoordinate={defaultCenter}
+            zoomLevel={defaultZoom}
           />
           {children}
         </MapLibreMap>
