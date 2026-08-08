@@ -15,8 +15,10 @@ import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
-import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
+import { MAP_PROVIDER, MAP_TYPE } from '../../utils/mapConfig';
 import { fetchPreciseRoute } from '../../utils/mapUtils';
+import AndroidMapView, { MarkerView, toLonLat } from '../../components/map/AndroidMapView';
+import type { AndroidMapRef } from '../../components/map/AndroidMapView';
 
 import CrowdPill from '../../components/cards/CrowdPill';
 import ComfortScoreRing from '../../components/cards/ComfortScoreRing';
@@ -37,7 +39,7 @@ const ROUTE_COLOURS = ['#3B82F6', '#8B5CF6', '#F97316', '#10B981', '#EF4444'];
 
 
 export default function MapScreen({ navigation }: Props) {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapView | AndroidMapRef>(null);
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -111,7 +113,7 @@ export default function MapScreen({ navigation }: Props) {
     const next = selectedRoute === routeId ? null : routeId;
     setSelectedRoute(next);
     setSelectedBus(null);
-    if (!next) mapRef.current?.animateToRegion(PAKISTAN_REGION, 600);
+    if (!next) (mapRef.current as any)?.animateToRegion(PAKISTAN_REGION, 600);
   }, [selectedRoute]);
 
   const handleMarkerPress = useCallback((busId: string) => {
@@ -146,45 +148,75 @@ export default function MapScreen({ navigation }: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      {/* ── Map ── */}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={MAP_PROVIDER}
-        mapType={MAP_TYPE}
-        initialRegion={PAKISTAN_REGION}
-        showsUserLocation={false}
-        showsMyLocationButton={false}
-        showsCompass={false}
-        onPress={handleDismissSheet}
-      >
-        {Platform.OS === 'android' && (
-          <UrlTile urlTemplate={OSM_TILE_URL} zIndex={-1} />
-        )}
-        {/* Route polylines hidden — TODO: re-enable once admin panel supports GPS stop entry */}
-
-        {/* Bus markers — null guard for missing GPS */}
-        {visibleBuses
-          .filter(bus => bus.gpsLocation?.latitude && bus.gpsLocation?.longitude)
-          .map(bus => {
-            const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
-            const isSelected = bus.id === selectedBus;
-            return (
-              <Marker
-                key={bus.id}
-                coordinate={bus.gpsLocation}
-                anchor={{ x: 0.5, y: 0.5 }}
-                onPress={() => handleMarkerPress(bus.id)}
-              >
-                <View style={[styles.busMarker, isSelected && styles.busMarkerSelected]}>
-                  <Text style={styles.busEmoji}>🚌</Text>
-                  <View style={[styles.crowdDot, { backgroundColor: crowdColour(crowd.crowdLevel) }]} />
-                </View>
-              </Marker>
-            );
-          })
-        }
-      </MapView>
+      {/* ── Map — platform-branched ── */}
+      {Platform.OS === 'android' ? (
+        <AndroidMapView
+          ref={mapRef as React.Ref<AndroidMapRef>}
+          style={styles.map}
+          initialRegion={PAKISTAN_REGION}
+          onPress={handleDismissSheet}
+        >
+          {/* Bus markers via MapLibre MarkerView */}
+          {visibleBuses
+            .filter(bus => bus.gpsLocation?.latitude && bus.gpsLocation?.longitude)
+            .map(bus => {
+              const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
+              const isSelected = bus.id === selectedBus;
+              return (
+                <MarkerView
+                  key={bus.id}
+                  coordinate={toLonLat(bus.gpsLocation)}
+                  anchor="center"
+                >
+                  <TouchableOpacity
+                    onPress={() => handleMarkerPress(bus.id)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.busMarker, isSelected && styles.busMarkerSelected]}>
+                      <Text style={styles.busEmoji}>🚌</Text>
+                      <View style={[styles.crowdDot, { backgroundColor: crowdColour(crowd.crowdLevel) }]} />
+                    </View>
+                  </TouchableOpacity>
+                </MarkerView>
+              );
+            })
+          }
+        </AndroidMapView>
+      ) : (
+        <MapView
+          ref={mapRef as React.Ref<MapView>}
+          style={styles.map}
+          provider={MAP_PROVIDER}
+          mapType={MAP_TYPE}
+          initialRegion={PAKISTAN_REGION}
+          showsUserLocation={false}
+          showsMyLocationButton={false}
+          showsCompass={false}
+          onPress={handleDismissSheet}
+        >
+          {/* Bus markers — null guard for missing GPS */}
+          {visibleBuses
+            .filter(bus => bus.gpsLocation?.latitude && bus.gpsLocation?.longitude)
+            .map(bus => {
+              const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
+              const isSelected = bus.id === selectedBus;
+              return (
+                <Marker
+                  key={bus.id}
+                  coordinate={bus.gpsLocation}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  onPress={() => handleMarkerPress(bus.id)}
+                >
+                  <View style={[styles.busMarker, isSelected && styles.busMarkerSelected]}>
+                    <Text style={styles.busEmoji}>🚌</Text>
+                    <View style={[styles.crowdDot, { backgroundColor: crowdColour(crowd.crowdLevel) }]} />
+                  </View>
+                </Marker>
+              );
+            })
+          }
+        </MapView>
+      )}
 
       {/* ── Safe area header overlay ── */}
       <SafeAreaView style={styles.headerOverlay} edges={['top']} pointerEvents="box-none">

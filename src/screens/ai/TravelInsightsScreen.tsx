@@ -26,7 +26,7 @@ const HOURS = [6, 8, 10, 12, 14, 16, 18, 20, 22];
 
 function crowdAtHour(h: number): { level: 'low' | 'medium' | 'high'; pct: number } {
   // Simulate peak morning / evening rush
-  if (h === 8 || h === 18) return { level: 'high',   pct: 90 };
+  if (h === 8 || h === 18) return { level: 'high', pct: 90 };
   if (h === 7 || h === 17 || h === 9 || h === 19) return { level: 'medium', pct: 65 };
   if (h === 12 || h === 13) return { level: 'medium', pct: 55 };
   return { level: 'low', pct: 30 };
@@ -36,14 +36,14 @@ const CROWD_COLORS = { low: Colors.success, medium: Colors.warning, high: Colors
 
 export default function TravelInsightsScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const [routines,    setRoutines]    = useState<RoutinePattern[]>([]);
+  const [routines, setRoutines] = useState<RoutinePattern[]>([]);
   const [suggestions, setSuggestions] = useState<AITripSuggestion[]>([]);
-  const [barAnims]   = useState(() => HOURS.map(() => new Animated.Value(0)));
-  const learningAnim  = useState(() => new Animated.Value(0))[0];
+  const [barAnims] = useState(() => HOURS.map(() => new Animated.Value(0)));
+  const learningAnim = useState(() => new Animated.Value(0))[0];
 
   // Live stats from Supabase bookings
-  const [totalTrips,   setTotalTrips]   = useState(0);
-  const [totalSpent,   setTotalSpent]   = useState(0);
+  const [totalTrips, setTotalTrips] = useState(0);
+  const [totalSpent, setTotalSpent] = useState(0);
   const [uniqueRoutes, setUniqueRoutes] = useState(0);
   const [routeUsageList, setRouteUsageList] = useState<{ name: string; count: number; avgComfort: number }[]>([]);
 
@@ -82,7 +82,7 @@ export default function TravelInsightsScreen({ navigation }: Props) {
           seatSelected: b.seatNumber?.toString() ?? '', completionStatus: b.bookingStatus as any,
         }));
       setRoutines(aiService.detectRoutines(tripHistory));
-      
+
       const [liveBusesRes, liveRoutesRes] = await Promise.all([
         busService.getAllActiveBuses(),
         busService.getAllRoutes()
@@ -113,7 +113,7 @@ export default function TravelInsightsScreen({ navigation }: Props) {
   }, [user]);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -133,7 +133,7 @@ export default function TravelInsightsScreen({ navigation }: Props) {
           {[
             { icon: '🗓️', label: 'Total Trips', value: totalTrips },
             { icon: '🗺️', label: 'Routes Used', value: uniqueRoutes },
-            { icon: '💰', label: 'Total Spent',  value: `PKR ${totalSpent.toLocaleString()}` },
+            { icon: '💰', label: 'Total Spent', value: `PKR ${totalSpent.toLocaleString()}` },
           ].map(s => (
             <View key={s.label} style={styles.summaryCard}>
               <Text style={styles.summaryIcon}>{s.icon}</Text>
@@ -187,13 +187,13 @@ export default function TravelInsightsScreen({ navigation }: Props) {
           {routeUsageList.map(r => {
             const maxUsage = Math.max(...routeUsageList.map(x => x.count), 1);
             return (
-            <View key={r.name} style={styles.routeBarRow}>
-              <Text style={styles.routeBarLabel} numberOfLines={1}>{r.name}</Text>
-              <View style={styles.routeBarBg}>
-                <View style={[styles.routeBarFill, { width: `${Math.round((r.count / maxUsage) * 100)}%` as any }]} />
+              <View key={r.name} style={styles.routeBarRow}>
+                <Text style={styles.routeBarLabel} numberOfLines={1}>{r.name}</Text>
+                <View style={styles.routeBarBg}>
+                  <View style={[styles.routeBarFill, { width: `${Math.round((r.count / maxUsage) * 100)}%` as any }]} />
+                </View>
+                <Text style={styles.routeBarCount}>{r.count}×</Text>
               </View>
-              <Text style={styles.routeBarCount}>{r.count}×</Text>
-            </View>
             );
           })}
         </View>
@@ -300,13 +300,13 @@ export default function TravelInsightsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe   : { flex: 1, backgroundColor: Colors.background },
-  header : {
+  safe: { flex: 1, backgroundColor: Colors.background },
+  header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.screenPadding, paddingTop: Spacing.lg, paddingBottom: Spacing.md,
   },
   headerTitle: { ...Typography.h2 },
-  headerSub  : { ...Typography.caption, marginTop: 2 },
+  headerSub: { ...Typography.caption, marginTop: 2 },
   learningBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.primaryTint, borderRadius: BorderRadius.full,
@@ -314,17 +314,17 @@ const styles = StyleSheet.create({
   },
   learningText: { fontSize: 11, fontWeight: '600', color: Colors.primary },
 
-  content : { paddingHorizontal: Spacing.screenPadding },
+  content: { paddingHorizontal: Spacing.screenPadding },
   sectionTitle: { ...Typography.h4, marginBottom: Spacing.sm, marginTop: Spacing.lg },
   card: { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.lg, ...Shadows.card, marginBottom: Spacing.sm },
 
   // Summary row
-  summaryRow : { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+  summaryRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
   summaryCard: {
     flex: 1, backgroundColor: Colors.card, borderRadius: BorderRadius.xl,
     padding: Spacing.md, alignItems: 'center', gap: 4, ...Shadows.card,
   },
-  summaryIcon : { fontSize: 22 },
+  summaryIcon: { fontSize: 22 },
   summaryValue: { ...Typography.h4, color: Colors.primary },
   summaryLabel: { ...Typography.tiny, textAlign: 'center' },
 
@@ -339,43 +339,43 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: Colors.primaryTint, alignItems: 'center', justifyContent: 'center',
   },
-  routineName : { ...Typography.bodyMedium, flex: 1 },
-  routineMeta : { ...Typography.tiny, marginTop: 2, marginBottom: Spacing.xs },
-  confBarBg   : { height: 4, backgroundColor: Colors.border, borderRadius: 2, marginTop: 4, overflow: 'hidden' },
-  confBarFill : { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
-  confText    : { ...Typography.tiny, color: Colors.textMuted, marginTop: 2 },
-  suggestBtn  : {
+  routineName: { ...Typography.bodyMedium, flex: 1 },
+  routineMeta: { ...Typography.tiny, marginTop: 2, marginBottom: Spacing.xs },
+  confBarBg: { height: 4, backgroundColor: Colors.border, borderRadius: 2, marginTop: 4, overflow: 'hidden' },
+  confBarFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
+  confText: { ...Typography.tiny, color: Colors.textMuted, marginTop: 2 },
+  suggestBtn: {
     backgroundColor: Colors.primary, borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
   },
   suggestBtnText: { ...Typography.tiny, color: Colors.white, fontWeight: '700' },
-  emptyCard  : { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.xxl, alignItems: 'center', gap: Spacing.sm, ...Shadows.card },
-  emptyIcon  : { fontSize: 40 },
-  emptyText  : { ...Typography.body, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  emptyCard: { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.xxl, alignItems: 'center', gap: Spacing.sm, ...Shadows.card },
+  emptyIcon: { fontSize: 40 },
+  emptyText: { ...Typography.body, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
   // Route usage bars
-  routeBarRow   : { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
-  routeBarLabel : { ...Typography.caption, width: 90 },
-  routeBarBg    : { flex: 1, height: 10, backgroundColor: Colors.border, borderRadius: 5, overflow: 'hidden' },
-  routeBarFill  : { height: '100%', backgroundColor: Colors.primary, borderRadius: 5 },
-  routeBarCount : { ...Typography.tiny, width: 20, textAlign: 'right' },
+  routeBarRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
+  routeBarLabel: { ...Typography.caption, width: 90 },
+  routeBarBg: { flex: 1, height: 10, backgroundColor: Colors.border, borderRadius: 5, overflow: 'hidden' },
+  routeBarFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 5 },
+  routeBarCount: { ...Typography.tiny, width: 20, textAlign: 'right' },
 
   // Comfort bars
-  comfortRow       : { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
+  comfortRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
   comfortRouteLabel: { ...Typography.caption, width: 90 },
-  comfortBarBg     : { flex: 1, height: 10, backgroundColor: Colors.border, borderRadius: 5, overflow: 'hidden' },
-  comfortBarFill   : { height: '100%', borderRadius: 5 },
-  comfortScore     : { ...Typography.tiny, width: 28, textAlign: 'right', fontWeight: '700' },
+  comfortBarBg: { flex: 1, height: 10, backgroundColor: Colors.border, borderRadius: 5, overflow: 'hidden' },
+  comfortBarFill: { height: '100%', borderRadius: 5 },
+  comfortScore: { ...Typography.tiny, width: 28, textAlign: 'right', fontWeight: '700' },
 
   // Chart
-  chartArea    : { flexDirection: 'row', alignItems: 'flex-end', height: 110, gap: 4, marginBottom: Spacing.sm },
-  chartColumn  : { flex: 1, alignItems: 'center', gap: 4 },
+  chartArea: { flexDirection: 'row', alignItems: 'flex-end', height: 110, gap: 4, marginBottom: Spacing.sm },
+  chartColumn: { flex: 1, alignItems: 'center', gap: 4 },
   chartBarContainer: { height: 100, justifyContent: 'flex-end', width: '100%' },
-  chartBar     : { borderRadius: 3, width: '100%' },
-  chartLabel   : { fontSize: 9, color: Colors.textMuted, fontWeight: '500' },
-  chartLegend  : { flexDirection: 'row', gap: Spacing.md, justifyContent: 'center', marginTop: Spacing.xs },
+  chartBar: { borderRadius: 3, width: '100%' },
+  chartLabel: { fontSize: 9, color: Colors.textMuted, fontWeight: '500' },
+  chartLegend: { flexDirection: 'row', gap: Spacing.md, justifyContent: 'center', marginTop: Spacing.xs },
   chartLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  chartLegendDot : { width: 8, height: 8, borderRadius: 4 },
+  chartLegendDot: { width: 8, height: 8, borderRadius: 4 },
   chartLegendText: { ...Typography.tiny },
 
   // Best time
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.primary + '30',
   },
   bestTimeTitle: { ...Typography.bodyMedium, color: Colors.primary },
-  bestTimeSub  : { ...Typography.tiny, marginTop: 2 },
+  bestTimeSub: { ...Typography.tiny, marginTop: 2 },
 
   // Suggestion cards
   suggestionCard: {
@@ -393,11 +393,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: Spacing.sm, ...Shadows.card,
   },
-  suggestionLeft  : { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 },
-  suggestionRoute : { ...Typography.bodyMedium },
-  suggestionMeta  : { ...Typography.tiny, marginTop: 2 },
-  suggestionRight : { alignItems: 'center' },
-  suggestionConf  : { ...Typography.h4, color: Colors.primary },
+  suggestionLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 },
+  suggestionRoute: { ...Typography.bodyMedium },
+  suggestionMeta: { ...Typography.tiny, marginTop: 2 },
+  suggestionRight: { alignItems: 'center' },
+  suggestionConf: { ...Typography.h4, color: Colors.primary },
   suggestionConfLabel: { ...Typography.tiny },
 
   // Learning banner

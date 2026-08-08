@@ -1,13 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Animated, TouchableOpacity
+  View, Text, StyleSheet, ScrollView, Animated, TouchableOpacity, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import { Platform } from 'react-native';
-import { UrlTile } from 'react-native-maps';
 
 import { TicketsStackParamList, Booking } from '../../types';
 import { Colors } from '../../constants/colors';
@@ -19,7 +17,8 @@ import { busService } from '../../services/busService';
 import { aiService } from '../../services/aiService';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import Button from '../../components/common/Button';
-import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
+import { MAP_PROVIDER, MAP_TYPE } from '../../utils/mapConfig';
+import AndroidMapView from '../../components/map/AndroidMapView';
 
 type Props = NativeStackScreenProps<TicketsStackParamList, 'ActiveTicket'>;
 
@@ -85,19 +84,23 @@ export default function ActiveTicketScreen({ navigation, route }: Props) {
 
         {/* Mini Map — centred on Pakistan (bus GPS not always available) */}
         <View style={styles.mapContainer}>
-          <MapView
-            key={`map-${MAP_TYPE}`}
-            style={styles.map}
-            provider={MAP_PROVIDER}
-            mapType={MAP_TYPE}
-            initialRegion={PAKISTAN_REGION}
-            scrollEnabled={false}
-            zoomEnabled={false}
-          >
-            {Platform.OS === 'android' && (
-              <UrlTile urlTemplate={OSM_TILE_URL} maximumZ={19} flipY={false} />
-            )}
-          </MapView>
+          {Platform.OS === 'android' ? (
+            <AndroidMapView
+              style={styles.map}
+              initialRegion={PAKISTAN_REGION}
+              scrollEnabled={false}
+              zoomEnabled={false}
+            />
+          ) : (
+            <MapView
+              style={styles.map}
+              provider={MAP_PROVIDER}
+              mapType={MAP_TYPE}
+              initialRegion={PAKISTAN_REGION}
+              scrollEnabled={false}
+              zoomEnabled={false}
+            />
+          )}
 
           <Button
             label="Track Live"

@@ -25,11 +25,6 @@
     "android": {
       "usesCleartextTraffic": true,
       "package": "com.smartbusplanner.app",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyDummyKeyForOSMTilesToPreventCrash12345"
-        }
-      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -43,7 +38,8 @@
       }
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "@maplibre/maplibre-react-native"
     ]
   }
 }

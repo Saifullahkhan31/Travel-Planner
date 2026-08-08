@@ -105,6 +105,7 @@ export default function CrowdPredictionScreen({ navigation, route }: Props) {
         setIsFromAPI(result.confidenceScore === 0.91);
         
         // 3. Fetch natural language AI Insight text WITHOUT blocking the UI
+        setAiTextLoading(true);
         aiService.getAISuggestionText(
           'comfortable seat, smooth journey',
           r.origin ?? 'Lahore',
@@ -244,7 +245,12 @@ export default function CrowdPredictionScreen({ navigation, route }: Props) {
                       },
                     ]} />
                   </View>
-                  <Text style={[styles.chartHourLabel, isNow && { color: Colors.primary, fontWeight: '700' }]}>
+                  <Text
+                    style={[styles.chartHourLabel, isNow && { color: Colors.primary, fontWeight: '700' }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
                     {h > 12 ? `${h - 12}p` : h === 12 ? '12p' : `${h}a`}
                   </Text>
                   {isNow && <View style={styles.nowDot} />}
@@ -342,11 +348,11 @@ const styles = StyleSheet.create({
   sectionTitle: { ...Typography.h4, marginBottom: Spacing.sm, marginTop: Spacing.sm },
 
   chartCard  : { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.lg, ...Shadows.card, marginBottom: Spacing.lg },
-  chartArea  : { flexDirection: 'row', alignItems: 'flex-end', height: 110, gap: 3 },
-  chartColumn: { flex: 1, alignItems: 'center' },
+  chartArea  : { flexDirection: 'row', alignItems: 'flex-end', height: 110, gap: 2 },
+  chartColumn: { flex: 1, alignItems: 'center', minWidth: 0 },
   chartBarContainer: { height: 100, justifyContent: 'flex-end', width: '100%' },
   chartBar   : { borderRadius: 3, width: '100%' },
-  chartHourLabel: { fontSize: 9, color: Colors.textMuted, marginTop: 3 },
+  chartHourLabel: { fontSize: 8, color: Colors.textMuted, marginTop: 3, width: '100%', textAlign: 'center' },
   nowDot     : { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.primary, marginTop: 1 },
   chartLegend  : { flexDirection: 'row', gap: Spacing.md, justifyContent: 'center', marginTop: Spacing.md },
   legendItem   : { flexDirection: 'row', alignItems: 'center', gap: 4 },

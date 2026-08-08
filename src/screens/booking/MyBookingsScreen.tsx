@@ -94,7 +94,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
   const filtered = bookings.filter(b => STATUS_MAP[tab].includes(b.bookingStatus));
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>My Bookings</Text>
         <TouchableOpacity
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   tabChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   tabText    : { ...Typography.caption, color: Colors.textSecondary },
   tabTextActive: { color: Colors.white, fontWeight: '600' },
-  listContent: { paddingHorizontal: Spacing.screenPadding, paddingBottom: Spacing.safeBottom },
+  listContent: { paddingHorizontal: Spacing.screenPadding, paddingBottom: Spacing.lg },
   centered   : { flex: 1, alignItems: 'center', justifyContent: 'center' },
   bookingCard: {
     backgroundColor: Colors.card, borderRadius: BorderRadius.xl,

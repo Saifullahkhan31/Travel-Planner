@@ -15,7 +15,9 @@ import { Typography } from '../../constants/typography';
 import { Shadows } from '../../constants/shadows';
 import { MOCK_ROUTES, MOCK_BUSES } from '../../services/mockData';
 import { aiService } from '../../services/aiService';
-import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
+import { MAP_PROVIDER, MAP_TYPE } from '../../utils/mapConfig';
+import AndroidMapView, { MarkerView, ShapeSource, Layer } from '../../components/map/AndroidMapView';
+import type { AndroidMapRef } from '../../components/map/AndroidMapView';
 
 // SCREEN : RouteVisualizationScreen  ROUTE : RouteVisualization
 
@@ -26,7 +28,7 @@ type Props = {
 
 export default function RouteVisualizationScreen({ navigation, route }: Props) {
   const { routeId } = route.params;
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapView | AndroidMapRef>(null);
 
   const busRoute  = MOCK_ROUTES.find(r => r.id === routeId) ?? MOCK_ROUTES[0];
   const routeBuses = MOCK_BUSES.filter(b => b.routeId === busRoute.id);
@@ -35,7 +37,7 @@ export default function RouteVisualizationScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (busRoute.stops.length > 0) {
       setTimeout(() => {
-        mapRef.current?.fitToCoordinates(
+        (mapRef.current as any)?.fitToCoordinates(
           busRoute.stops.map(s => ({ latitude: s.latitude, longitude: s.longitude })),
           { edgePadding: { top: 80, right: 40, bottom: 300, left: 40 }, animated: true },
         );
@@ -43,58 +45,112 @@ export default function RouteVisualizationScreen({ navigation, route }: Props) {
     }
   }, [routeId]);
 
+  // Build stop coords and GeoJSON for polyline
+  const stopCoords = busRoute.stops.map(s => ({ latitude: s.latitude, longitude: s.longitude }));
+  const routeGeoJSON = {
+    type: 'FeatureCollection' as const,
+    features: stopCoords.length >= 2 ? [{
+      type: 'Feature' as const,
+      properties: {},
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: busRoute.stops.map(s => [s.longitude, s.latitude]),
+      },
+    }] : [],
+  };
+
   return (
     <View style={styles.container}>
-      {/* ── Map ── */}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={MAP_PROVIDER}
-        mapType={MAP_TYPE}
-        initialRegion={{
-          latitude      : busRoute.stops[0]?.latitude   ?? 30.37,
-          longitude     : busRoute.stops[0]?.longitude  ?? 69.34,
-          latitudeDelta : 3.0,
-          longitudeDelta: 3.0,
-        }}
-        showsCompass={false}
-        showsUserLocation={false}
-      >
-        {Platform.OS === 'android' && (
-          <UrlTile urlTemplate={OSM_TILE_URL} zIndex={-1} />
-        )}
-        {/* Route polyline */}
-        <Polyline
-          coordinates={busRoute.stops.map(s => ({ latitude: s.latitude, longitude: s.longitude }))}
-          strokeColor={Colors.primary}
-          strokeWidth={4}
-        />
-
-        {/* Stop markers */}
-        {busRoute.stops.map((stop, idx) => {
-          const isFirst = idx === 0;
-          const isLast  = idx === busRoute.stops.length - 1;
-          return (
-            <Marker
-              key={stop.id}
-              coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
-              anchor={{ x: 0.5, y: 0.5 }}
+      {/* ── Map — platform-branched ── */}
+      {Platform.OS === 'android' ? (
+        <AndroidMapView
+          ref={mapRef as React.Ref<AndroidMapRef>}
+          style={styles.map}
+          initialRegion={{
+            latitude: busRoute.stops[0]?.latitude ?? 30.37,
+            longitude: busRoute.stops[0]?.longitude ?? 69.34,
+            latitudeDelta: 3.0,
+            longitudeDelta: 3.0,
+          }}
+        >
+          {/* Route polyline */}
+          {stopCoords.length >= 2 && (
+            <ShapeSource id="routeLine" data={routeGeoJSON}>
+              <Layer
+                id="routeLineLayer"
+                type="line"
+                style={{ lineColor: Colors.primary, lineWidth: 4, lineCap: 'round', lineJoin: 'round' } as any}
+              />
+            </ShapeSource>
+          )}
+          {/* Stop markers */}
+          {busRoute.stops.map((stop, idx) => {
+            const isFirst = idx === 0;
+            const isLast = idx === busRoute.stops.length - 1;
+            return (
+              <MarkerView
+                key={stop.id}
+                coordinate={[stop.longitude, stop.latitude]}
+                anchor="center"
+              >
+                <View style={[styles.stopMarker, isFirst && styles.stopFirst, isLast && styles.stopLast]}>
+                  <Text style={styles.stopOrder}>{isFirst ? '🏁' : isLast ? '📍' : idx + 1}</Text>
+                </View>
+              </MarkerView>
+            );
+          })}
+          {/* Bus markers on this route */}
+          {routeBuses.map(bus => (
+            <MarkerView
+              key={bus.id}
+              coordinate={[bus.gpsLocation.longitude, bus.gpsLocation.latitude]}
+              anchor="center"
             >
-              <View style={[
-                styles.stopMarker,
-                isFirst && styles.stopFirst,
-                isLast  && styles.stopLast,
-              ]}>
-                <Text style={styles.stopOrder}>{isFirst ? '🏁' : isLast ? '📍' : idx + 1}</Text>
+              <View style={styles.busMarker}>
+                <Text style={styles.busEmoji}>🚌</Text>
               </View>
-            </Marker>
-          );
-        })}
-
-        {/* Bus markers on this route */}
-        {routeBuses.map(bus => {
-          const crowd = aiService.predictCrowd(bus.id, bus.currentOccupancy, bus.totalSeats);
-          return (
+            </MarkerView>
+          ))}
+        </AndroidMapView>
+      ) : (
+        <MapView
+          ref={mapRef as React.Ref<MapView>}
+          style={styles.map}
+          provider={MAP_PROVIDER}
+          mapType={MAP_TYPE}
+          initialRegion={{
+            latitude: busRoute.stops[0]?.latitude ?? 30.37,
+            longitude: busRoute.stops[0]?.longitude ?? 69.34,
+            latitudeDelta: 3.0,
+            longitudeDelta: 3.0,
+          }}
+          showsCompass={false}
+          showsUserLocation={false}
+        >
+          {/* Route polyline */}
+          <Polyline
+            coordinates={busRoute.stops.map(s => ({ latitude: s.latitude, longitude: s.longitude }))}
+            strokeColor={Colors.primary}
+            strokeWidth={4}
+          />
+          {/* Stop markers */}
+          {busRoute.stops.map((stop, idx) => {
+            const isFirst = idx === 0;
+            const isLast  = idx === busRoute.stops.length - 1;
+            return (
+              <Marker
+                key={stop.id}
+                coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <View style={[styles.stopMarker, isFirst && styles.stopFirst, isLast && styles.stopLast]}>
+                  <Text style={styles.stopOrder}>{isFirst ? '🏁' : isLast ? '📍' : idx + 1}</Text>
+                </View>
+              </Marker>
+            );
+          })}
+          {/* Bus markers on this route */}
+          {routeBuses.map(bus => (
             <Marker
               key={bus.id}
               coordinate={bus.gpsLocation}
@@ -104,9 +160,9 @@ export default function RouteVisualizationScreen({ navigation, route }: Props) {
                 <Text style={styles.busEmoji}>🚌</Text>
               </View>
             </Marker>
-          );
-        })}
-      </MapView>
+          ))}
+        </MapView>
+      )}
 
       {/* ── Header overlay ── */}
       <SafeAreaView style={styles.headerOverlay} edges={['top']}>

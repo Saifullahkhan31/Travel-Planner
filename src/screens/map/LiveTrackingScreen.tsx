@@ -16,8 +16,10 @@ import { Shadows } from '../../constants/shadows';
 import { MOCK_BUSES, MOCK_ROUTES } from '../../services/mockData';
 import { aiService } from '../../services/aiService';
 import { busService } from '../../services/busService';
-import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
+import { MAP_PROVIDER, MAP_TYPE } from '../../utils/mapConfig';
 import { fetchPreciseRoute, getCoordAlongPath, calculatePathDistances } from '../../utils/mapUtils';
+import AndroidMapView, { MarkerView, ShapeSource, Layer, toLonLat } from '../../components/map/AndroidMapView';
+import type { AndroidMapRef } from '../../components/map/AndroidMapView';
 import CrowdPill from '../../components/cards/CrowdPill';
 
 // SCREEN : LiveTrackingScreen  ROUTE : LiveTracking
@@ -37,7 +39,7 @@ const PAKISTAN_REGION = {
 
 export default function LiveTrackingScreen({ navigation, route }: Props) {
   const { busId } = route.params;
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapView | AndroidMapRef>(null);
 
   const [loading, setLoading] = useState(true);
   const [bus, setBus] = useState<Bus | null>(null);
@@ -150,7 +152,7 @@ export default function LiveTrackingScreen({ navigation, route }: Props) {
       cameraInterval = setInterval(() => {
         const newCoord = getCoordAlongPath(effectivePath, progressRef.current, distances, totalDist);
         if (isFollowingRef.current && newCoord) {
-          mapRef.current?.animateCamera({ center: newCoord }, { duration: 2500 });
+          (mapRef.current as any)?.animateCamera({ center: newCoord }, { duration: 2500 });
         }
       }, 3000);
     };
@@ -184,84 +186,131 @@ export default function LiveTrackingScreen({ navigation, route }: Props) {
     : `${etaMinutes} min`;
 
   // ── Render ────────────────────────────────────────────────────────────────
+  // Build polyline coords once
+  const polyCoords = preciseRoute.length >= 2
+    ? preciseRoute
+    : busRoute.stops.map(s => ({ latitude: s.latitude, longitude: s.longitude })).filter(c => c.latitude !== 0 && c.longitude !== 0);
+
+  // GeoJSON line for MapLibre (Android)
+  const routeGeoJSON = {
+    type: 'FeatureCollection' as const,
+    features: polyCoords.length >= 2 ? [{
+      type: 'Feature' as const,
+      properties: {},
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: polyCoords.map(c => [c.longitude, c.latitude]),
+      },
+    }] : [],
+  };
+
   return (
     <View style={styles.container}>
-      {/* ── Map ── */}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={MAP_PROVIDER}
-        mapType={MAP_TYPE}
-        initialRegion={{
-          ...bus.gpsLocation,
-          latitudeDelta : 1.5,
-          longitudeDelta: 1.5,
-        }}
-        showsUserLocation={false}
-        showsCompass={false}
-        onPanDrag={() => {
-          if (isFollowingRef.current) {
-            isFollowingRef.current = false;
-            setIsFollowing(false);
-          }
-        }}
-        onRegionChangeComplete={(region, details) => {
-          if (details?.isGesture && isFollowingRef.current) {
-            isFollowingRef.current = false;
-            setIsFollowing(false);
-          }
-        }}
-      >
-        {Platform.OS === 'android' && (
-          <UrlTile urlTemplate={OSM_TILE_URL} zIndex={-1} />
-        )}
-        {/* Full route polyline — only re-renders when preciseRoute changes, not on every busCoord update */}
-        {(() => {
-          const polyCoords = preciseRoute.length >= 2
-            ? preciseRoute
-            : busRoute.stops
-                .map(s => ({ latitude: s.latitude, longitude: s.longitude }))
-                .filter(c => c.latitude !== 0 && c.longitude !== 0);
-          if (polyCoords.length < 2) return null;
-          return (
+      {/* ── Map — platform-branched ── */}
+      {Platform.OS === 'android' ? (
+        <AndroidMapView
+          ref={mapRef as React.Ref<AndroidMapRef>}
+          style={styles.map}
+          initialRegion={{ ...bus.gpsLocation, latitudeDelta: 1.5, longitudeDelta: 1.5 }}
+          onPanDrag={() => {
+            if (isFollowingRef.current) {
+              isFollowingRef.current = false;
+              setIsFollowing(false);
+            }
+          }}
+        >
+          {/* Route polyline */}
+          {polyCoords.length >= 2 && (
+            <ShapeSource id="routeLine" data={routeGeoJSON}>
+              <Layer
+                id="routeLineLayer"
+                type="line"
+                style={{ lineColor: Colors.primary + '60', lineWidth: 4, lineCap: 'round', lineJoin: 'round' } as any}
+              />
+            </ShapeSource>
+          )}
+          {/* Stop markers */}
+          {busRoute.stops.map((stop, idx) => (
+            <MarkerView
+              key={stop.id}
+              coordinate={[stop.longitude, stop.latitude]}
+              anchor="center"
+            >
+              <View style={[
+                styles.stopMarker,
+                idx === 0 && styles.stopMarkerStart,
+                idx === busRoute.stops.length - 1 && styles.stopMarkerEnd,
+              ]}>
+                <Text style={styles.stopMarkerText} numberOfLines={2}>
+                  {idx === 0 ? '🏁' : idx === busRoute.stops.length - 1 ? '📍' : `${idx + 1}`}
+                </Text>
+              </View>
+            </MarkerView>
+          ))}
+          {/* Live bus marker */}
+          <MarkerView coordinate={[busCoord.longitude, busCoord.latitude]} anchor="center">
+            <Animated.View style={[styles.liveBusMarker, { transform: [{ scale: 1 }] }]}>
+              <Text style={styles.liveBusEmoji}>🚌</Text>
+            </Animated.View>
+          </MarkerView>
+        </AndroidMapView>
+      ) : (
+        <MapView
+          ref={mapRef as React.Ref<MapView>}
+          style={styles.map}
+          provider={MAP_PROVIDER}
+          mapType={MAP_TYPE}
+          initialRegion={{ ...bus.gpsLocation, latitudeDelta: 1.5, longitudeDelta: 1.5 }}
+          showsUserLocation={false}
+          showsCompass={false}
+          onPanDrag={() => {
+            if (isFollowingRef.current) {
+              isFollowingRef.current = false;
+              setIsFollowing(false);
+            }
+          }}
+          onRegionChangeComplete={(region, details) => {
+            if (details?.isGesture && isFollowingRef.current) {
+              isFollowingRef.current = false;
+              setIsFollowing(false);
+            }
+          }}
+        >
+          {/* Full route polyline */}
+          {polyCoords.length >= 2 && (
             <Polyline
               key={`poly-full-${busRoute.id}`}
               coordinates={polyCoords}
               strokeColor={Colors.primary + '60'}
               strokeWidth={4}
             />
-          );
-        })()}
-
-        {/* Stop markers */}
-        {busRoute.stops.map((stop, idx) => (
-          <Marker
-            key={stop.id}
-            coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            <View style={[
-              styles.stopMarker,
-              idx === 0 && styles.stopMarkerStart,
-              idx === busRoute.stops.length - 1 && styles.stopMarkerEnd,
-            ]}>
-              <Text style={styles.stopMarkerText} numberOfLines={2}>
-                {idx === 0 ? '🏁' : idx === busRoute.stops.length - 1 ? '📍' : `${idx + 1}`}
-              </Text>
-            </View>
+          )}
+          {/* Stop markers */}
+          {busRoute.stops.map((stop, idx) => (
+            <Marker
+              key={stop.id}
+              coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={[
+                styles.stopMarker,
+                idx === 0 && styles.stopMarkerStart,
+                idx === busRoute.stops.length - 1 && styles.stopMarkerEnd,
+              ]}>
+                <Text style={styles.stopMarkerText} numberOfLines={2}>
+                  {idx === 0 ? '🏁' : idx === busRoute.stops.length - 1 ? '📍' : `${idx + 1}`}
+                </Text>
+              </View>
+            </Marker>
+          ))}
+          {/* Live bus marker */}
+          <Marker coordinate={busCoord} anchor={{ x: 0.5, y: 0.5 }}>
+            <Animated.View style={[styles.liveBusMarker, { transform: [{ scale: 1 }] }]}>
+              <Text style={styles.liveBusEmoji}>🚌</Text>
+            </Animated.View>
           </Marker>
-        ))}
-
-        {/* Live bus marker */}
-        <Marker
-          coordinate={busCoord}
-          anchor={{ x: 0.5, y: 0.5 }}
-        >
-          <Animated.View style={[styles.liveBusMarker, { transform: [{ scale: 1 }] }]}>
-            <Text style={styles.liveBusEmoji}>🚌</Text>
-          </Animated.View>
-        </Marker>
-      </MapView>
+        </MapView>
+      )}
 
       {/* ── Top bar overlay ── */}
       <SafeAreaView style={styles.topBar} edges={['top']}>
@@ -306,7 +355,7 @@ export default function LiveTrackingScreen({ navigation, route }: Props) {
           onPress={() => {
             isFollowingRef.current = true;
             setIsFollowing(true);
-            mapRef.current?.animateCamera({ center: busCoord }, { duration: 1000 });
+            (mapRef.current as any)?.animateCamera({ center: busCoord }, { duration: 1000 });
           }}
         >
           <Ionicons name="navigate" size={18} color={Colors.primary} />

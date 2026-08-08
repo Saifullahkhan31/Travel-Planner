@@ -4,7 +4,7 @@ import {
   FlatList, RefreshControl, Dimensions, Platform, Modal
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT, UrlTile } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,7 +19,8 @@ import { busService } from '../../services/busService';
 import { useAuth } from '../../context/AuthContext';
 import { HOME_MAP_POLYLINE_COORDS, HOME_MAP_BUS_LOCATION } from '../../services/aiMockData';
 import { supabase } from '../../lib/supabase';
-import { MAP_PROVIDER, MAP_TYPE, OSM_TILE_URL } from '../../utils/mapConfig';
+import { MAP_PROVIDER, MAP_TYPE } from '../../utils/mapConfig';
+import AndroidMapView from '../../components/map/AndroidMapView';
 import CrowdPill from '../../components/cards/CrowdPill';
 import ComfortScoreRing from '../../components/cards/ComfortScoreRing';
 import AISuggestionCard from '../../components/cards/AISuggestionCard';
@@ -248,43 +249,56 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* ── Live Map Preview ── */}
         <View style={styles.mapCard}>
-          <MapView
-            style={styles.mapView}
-            provider={MAP_PROVIDER}
-            mapType={MAP_TYPE}
-            initialRegion={{
-              latitude      : 25.1,
-              longitude     : 67.5,
-              latitudeDelta : 2.5,
-              longitudeDelta: 2.5,
-            }}
-            scrollEnabled={false}
-            zoomEnabled={false}
-            rotateEnabled={false}
-            pitchEnabled={false}
-            showsUserLocation={false}
-            showsCompass={false}
-            showsScale={false}
-          >
-            {Platform.OS === 'android' && (
-              <UrlTile urlTemplate={OSM_TILE_URL} zIndex={-1} />
-            )}
-            {/* Karachi → Hyderabad decorative polyline (static highway coords) */}
-            <Polyline
-              coordinates={HOME_MAP_POLYLINE_COORDS}
-              strokeColor={Colors.primary}
-              strokeWidth={3}
+          {Platform.OS === 'android' ? (
+            <AndroidMapView
+              style={styles.mapView}
+              initialRegion={{
+                latitude: 25.1,
+                longitude: 67.5,
+                latitudeDelta: 2.5,
+                longitudeDelta: 2.5,
+              }}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              rotateEnabled={false}
+              pitchEnabled={false}
             />
-            {/* Static bus marker for map preview */}
-            <Marker
-              coordinate={HOME_MAP_BUS_LOCATION}
-              anchor={{ x: 0.5, y: 0.5 }}
+          ) : (
+            <MapView
+              style={styles.mapView}
+              provider={MAP_PROVIDER}
+              mapType={MAP_TYPE}
+              initialRegion={{
+                latitude: 25.1,
+                longitude: 67.5,
+                latitudeDelta: 2.5,
+                longitudeDelta: 2.5,
+              }}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              rotateEnabled={false}
+              pitchEnabled={false}
+              showsUserLocation={false}
+              showsCompass={false}
+              showsScale={false}
             >
-              <View style={styles.mapBusMarker}>
-                <Text style={{ fontSize: 14 }}>🚌</Text>
-              </View>
-            </Marker>
-          </MapView>
+              {/* Karachi → Hyderabad decorative polyline (static highway coords) */}
+              <Polyline
+                coordinates={HOME_MAP_POLYLINE_COORDS}
+                strokeColor={Colors.primary}
+                strokeWidth={3}
+              />
+              {/* Static bus marker for map preview */}
+              <Marker
+                coordinate={HOME_MAP_BUS_LOCATION}
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <View style={styles.mapBusMarker}>
+                  <Text style={{ fontSize: 14 }}>🚌</Text>
+                </View>
+              </Marker>
+            </MapView>
+          )}
 
           {/* Overlay */}
           <View style={styles.mapOverlay}>

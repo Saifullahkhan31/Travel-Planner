@@ -25,11 +25,11 @@ type Props = NativeStackScreenProps<AIStackParamList, 'AITripSuggestion'>;
 // Reason pills generated per suggestion
 function getReasonsForSuggestion(isRoutine: boolean, confidence: number, crowdLevel: string): string[] {
   const reasons: string[] = [];
-  if (isRoutine)          reasons.push('📅 Matches your routine');
-  if (crowdLevel === 'low')   reasons.push('✅ Low crowd expected');
+  if (isRoutine) reasons.push('📅 Matches your routine');
+  if (crowdLevel === 'low') reasons.push('✅ Low crowd expected');
   if (crowdLevel === 'medium') reasons.push('⚡ Moderate crowd, book fast');
-  if (confidence > 0.85)  reasons.push('🧠 High AI confidence');
-  if (confidence > 0.75)  reasons.push('🗺️ Best route for your area');
+  if (confidence > 0.85) reasons.push('🧠 High AI confidence');
+  if (confidence > 0.75) reasons.push('🗺️ Best route for your area');
   reasons.push('🚌 Bus departing soon');
   return reasons.slice(0, 3);
 }
@@ -45,9 +45,9 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
   const { user, updateUser } = useAuth();
   // Alternatives: other suggestions on different routes
   const alternatives = aiService.getTripSuggestions(user).filter(sg => sg.routeId !== s.routeId).slice(0, 2);
-  const slideAnim  = useRef(new Animated.Value(30)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
-  const confAnim   = useRef(new Animated.Value(0)).current;
+  const confAnim = useRef(new Animated.Value(0)).current;
 
   const [isFav, setIsFav] = React.useState(false);
   const [togglingFav, setTogglingFav] = React.useState(false);
@@ -67,7 +67,7 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
       const newRoutes = isCurrentlyFav
         ? routes.filter(r => r !== s.routeName)
         : [...routes, s.routeName];
-      
+
       const { data, error } = await authService.updateProfile(user.id, { frequentRoutes: newRoutes });
       if (error) throw new Error(error);
       if (data) {
@@ -83,9 +83,9 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(slideAnim,   { toValue: 0,   duration: 400, useNativeDriver: true }),
-      Animated.timing(opacityAnim, { toValue: 1,   duration: 400, useNativeDriver: true }),
-      Animated.timing(confAnim,    { toValue: 1,   duration: 800, delay: 300, useNativeDriver: false }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(confAnim, { toValue: 1, duration: 800, delay: 300, useNativeDriver: false }),
     ]).start();
 
     // Fetch live bus and route details
@@ -104,7 +104,7 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
           const { data } = await busService.getRouteById(s.routeId);
           if (data) setRoute(data);
         }
-        
+
         // Fetch live AI suggestion text from FastAPI
         const text = await aiService.getAISuggestionText(
           'comfortable seat, smooth journey',
@@ -138,9 +138,9 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
       return;
     }
     (navigation as any).navigate('SeatSelection', {
-      busId       : bus.id,
-      routeId     : busRoute.id,
-      travelDate  : new Date().toISOString().split('T')[0],
+      busId: bus.id,
+      routeId: busRoute.id,
+      travelDate: new Date().toISOString().split('T')[0],
     });
   };
 
@@ -163,10 +163,10 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
             <ActivityIndicator size="small" color={Colors.primary} />
           ) : (
             <TouchableOpacity onPress={toggleFav}>
-              <Ionicons 
-                name={isFav ? "heart" : "heart-outline"} 
-                size={24} 
-                color={isFav ? Colors.error : Colors.textPrimary} 
+              <Ionicons
+                name={isFav ? "heart" : "heart-outline"}
+                size={24}
+                color={isFav ? Colors.error : Colors.textPrimary}
               />
             </TouchableOpacity>
           )}
@@ -208,12 +208,12 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
           {/* Details Grid */}
           <View style={styles.detailGrid}>
             {[
-              { icon: 'time-outline',        label: 'Departure', value: s.departureTime },
-              { icon: 'speedometer-outline', label: 'ETA',       value: `${s.eta} min` },
-              { icon: 'cash-outline',        label: 'Est. Fare', value: `PKR ${s.estimatedFare}` },
-              { icon: 'car-outline',         label: 'Bus Type',  value: bus?.busType ?? s.comfortScore.label ?? '—' },
-              { icon: 'person-outline',      label: 'Driver',    value: bus?.driverName ?? '—' },
-              { icon: 'keypad-outline',      label: 'Plate',     value: bus?.plateNumber ?? '—' },
+              { icon: 'time-outline', label: 'Departure', value: s.departureTime },
+              { icon: 'speedometer-outline', label: 'ETA', value: `${s.eta} min` },
+              { icon: 'cash-outline', label: 'Est. Fare', value: `PKR ${s.estimatedFare}` },
+              { icon: 'car-outline', label: 'Bus Type', value: bus?.busType ?? s.comfortScore.label ?? '—' },
+              { icon: 'person-outline', label: 'Driver', value: bus?.driverName ?? '—' },
+              { icon: 'keypad-outline', label: 'Plate', value: bus?.plateNumber ?? '—' },
             ].map(d => (
               <View key={d.label} style={styles.detailItem}>
                 <Ionicons name={d.icon as any} size={13} color={Colors.textMuted} />
@@ -324,22 +324,22 @@ export default function AITripSuggestionScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe   : { flex: 1, backgroundColor: Colors.background },
-  header : {
+  safe: { flex: 1, backgroundColor: Colors.background },
+  header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: Spacing.screenPadding, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
   },
-  backBtn      : { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  headerCenter : { flex: 1, alignItems: 'center', gap: 4 },
-  headerTitle  : { ...Typography.h4 },
-  sparkBadge   : {
+  backBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  headerTitle: { ...Typography.h4 },
+  sparkBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.primary, borderRadius: BorderRadius.full,
     paddingHorizontal: 8, paddingVertical: 3,
   },
   sparkBadgeText: { fontSize: 9, fontWeight: '700', color: Colors.white },
 
-  content : { paddingHorizontal: Spacing.screenPadding },
+  content: { paddingHorizontal: Spacing.screenPadding },
   subLabel: { ...Typography.caption, color: Colors.textSecondary, textAlign: 'center', marginBottom: Spacing.md },
 
   mainCard: {
@@ -348,21 +348,21 @@ const styles = StyleSheet.create({
   },
   routeRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.xl },
   routeEndpoint: { flex: 1 },
-  routeCode    : { fontSize: 24, fontWeight: '800', color: Colors.textPrimary },
-  routeCity    : { ...Typography.tiny, marginTop: 2 },
-  routeArrow   : { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  arrowLine    : { flex: 1, height: 1, backgroundColor: Colors.border },
-  cardDivider  : { height: 1, backgroundColor: Colors.divider },
+  routeCode: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary },
+  routeCity: { ...Typography.tiny, marginTop: 2 },
+  routeArrow: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  arrowLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  cardDivider: { height: 1, backgroundColor: Colors.divider },
 
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: Spacing.lg },
   detailItem: { width: '50%', paddingVertical: Spacing.sm, gap: 2 },
   detailLabel: { ...Typography.tiny, color: Colors.textMuted },
   detailValue: { ...Typography.captionMed },
 
-  scoresRow : { flexDirection: 'row', padding: Spacing.lg },
+  scoresRow: { flexDirection: 'row', padding: Spacing.lg },
   scoreBlock: { flex: 1, alignItems: 'center', gap: Spacing.sm },
-  scoreBlockLabel  : { ...Typography.caption, color: Colors.textSecondary },
-  scoreBlockSub    : { ...Typography.tiny, marginTop: 4 },
+  scoreBlockLabel: { ...Typography.caption, color: Colors.textSecondary },
+  scoreBlockSub: { ...Typography.tiny, marginTop: 4 },
   scoreBlockDivider: { width: 1, backgroundColor: Colors.divider, alignSelf: 'stretch' },
 
   sectionTitle: { ...Typography.h4, marginBottom: Spacing.sm, marginTop: Spacing.sm },
@@ -374,13 +374,13 @@ const styles = StyleSheet.create({
   },
   reasonText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
 
-  confCard  : { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.lg, ...Shadows.card, marginBottom: Spacing.lg },
+  confCard: { backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.lg, ...Shadows.card, marginBottom: Spacing.lg },
   confHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
-  confTitle : { ...Typography.bodyMedium },
-  confPct   : { ...Typography.h4, color: Colors.primary },
-  confBarBg : { height: 10, backgroundColor: Colors.border, borderRadius: 5, overflow: 'hidden', marginBottom: Spacing.sm },
+  confTitle: { ...Typography.bodyMedium },
+  confPct: { ...Typography.h4, color: Colors.primary },
+  confBarBg: { height: 10, backgroundColor: Colors.border, borderRadius: 5, overflow: 'hidden', marginBottom: Spacing.sm },
   confBarFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 5 },
-  confSub   : { ...Typography.tiny, color: Colors.textMuted },
+  confSub: { ...Typography.tiny, color: Colors.textMuted },
 
   altCard: {
     backgroundColor: Colors.card, borderRadius: BorderRadius.lg, padding: Spacing.lg,
@@ -388,10 +388,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm, ...Shadows.card,
   },
   altRoute: { ...Typography.bodyMedium },
-  altMeta : { ...Typography.tiny, marginTop: 2 },
-  altConf : { alignItems: 'center', paddingHorizontal: Spacing.sm },
-  altConfVal   : { ...Typography.h4, color: Colors.primary },
-  altConfLabel : { ...Typography.tiny },
+  altMeta: { ...Typography.tiny, marginTop: 2 },
+  altConf: { alignItems: 'center', paddingHorizontal: Spacing.sm },
+  altConfVal: { ...Typography.h4, color: Colors.primary },
+  altConfLabel: { ...Typography.tiny },
 
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -399,24 +399,24 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     borderTopWidth: 1, borderTopColor: Colors.border, paddingBottom: Spacing.safeBottom,
   },
-  notNowBtn : { alignItems: 'center', paddingVertical: Spacing.sm },
+  notNowBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
   notNowText: { ...Typography.caption, color: Colors.textMuted },
 
   aiInsightCard: {
     backgroundColor: Colors.primaryTint,
-    borderRadius   : BorderRadius.xl,
-    padding        : Spacing.lg,
-    marginBottom   : Spacing.lg,
-    borderWidth    : 1,
-    borderColor    : Colors.primary + '30',
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
     ...Shadows.card,
   },
   aiInsightHeader: {
-    flexDirection : 'row',
-    alignItems    : 'center',
-    gap           : Spacing.sm,
-    marginBottom  : Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   aiInsightTitle: { ...Typography.captionMed, color: Colors.primary, flex: 1 },
-  aiInsightText : { ...Typography.body, color: Colors.textPrimary, lineHeight: 22 },
+  aiInsightText: { ...Typography.body, color: Colors.textPrimary, lineHeight: 22 },
 });

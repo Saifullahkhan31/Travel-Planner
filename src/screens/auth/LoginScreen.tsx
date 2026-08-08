@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
   },
-  errorText: { color: Colors.error, ...Typography.caption, textAlign: 'center' },
+  errorText: { ...Typography.caption, color: Colors.error, textAlign: 'center' },
   forgotLink: { alignSelf: 'flex-end', marginBottom: Spacing.xl, marginTop: Spacing.xs },
   forgotText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
   registerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },

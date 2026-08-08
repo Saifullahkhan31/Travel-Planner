@@ -258,6 +258,7 @@ export type RootStackParamList = {
 export type TicketsStackParamList = {
   MyBookings         : undefined;
   ActiveTicket       : { bookingId: string };
+  DigitalTicket      : { bookingId: string };
   BookingCancellation: { bookingId: string };
   TravelHistory      : undefined;
   TripDetail         : { tripId: string };
